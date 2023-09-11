@@ -1,14 +1,23 @@
+mod render_pipeline;
+
+use image::GenericImageView;
 use log::info;
 use wgpu::{Label, PresentMode};
 use winit::{event::WindowEvent, window::Window};
 
+use self::render_pipeline::RenderPipeline;
+
 pub struct State {
     /// Surface of the window we draw on
     surface: wgpu::Surface,
-    device: wgpu::Device,
+
+    background_color: wgpu::Color,
+    pub device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     pub size: winit::dpi::PhysicalSize<u32>,
+    render_pipeline: RenderPipeline,
+    output_texture: wgpu::TextureView,
     // The window must be declared after the surface so
     // it gets dropped after it as the surface contains
     // unsafe references to the window's resources.
@@ -48,7 +57,7 @@ impl State {
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::empty(),
+                    features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
                     limits: wgpu::Limits::default(),
                     label: Label::Some("gpu device. Used to open connections to the gpu"),
                 },
@@ -76,14 +85,54 @@ impl State {
             view_formats: vec![],
         };
         surface.configure(&device, &config);
-        Self {
-            window,
-            surface,
-            device,
-            queue,
-            config,
-            size,
-        }
+        let render_pipeline = RenderPipeline::new(&device, &config);
+        
+        // output texture 
+        let diffuse_bytes = include_bytes!("../../assets/wallpaper.jpg");
+        let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
+        let df = diffuse_image.to_rgba8();
+        let dimensions = diffuse_image.dimensions();
+        let texture_size = wgpu::Extent3d {
+            width: dimensions.0,
+            height: dimensions.1,
+            depth_or_array_layers: 1,
+        };
+        let output_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Output texture"),
+            size: texture_size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let output_texture_view = output_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        queue.write_texture(wgpu::ImageCopyTexture {
+            texture: &output_texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        }, 
+        &df, 
+        wgpu::ImageDataLayout {
+            offset: 0,
+            bytes_per_row: Some(4 * dimensions.0),
+            rows_per_image: Some(dimensions.1),
+        },
+        texture_size
+    );
+    Self {
+        window,
+        surface,
+        render_pipeline,
+        device,
+        output_texture: output_texture_view,
+        background_color: wgpu::Color::BLUE,
+        queue,
+        config,
+        size,
+    }
     }
     pub fn window(&self) -> &Window {
         &self.window
@@ -101,7 +150,6 @@ impl State {
     pub fn input(&mut self, _event: &WindowEvent) -> bool {
         false
     }
-
     pub fn update(&mut self) {}
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -114,30 +162,40 @@ impl State {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
+        let render_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Render bind group"),
+            layout: &self.render_pipeline.bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.output_texture),
+                },
+            ],
+        });
         {
-            let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
+                        load: wgpu::LoadOp::Clear(self.background_color),
                         store: true,
                     },
                 })],
                 depth_stencil_attachment: None,
             });
+            
+            render_pass.set_pipeline(&self.render_pipeline.pipeline);
+            render_pass.set_bind_group(0, &render_bind_group, &[]);
+            render_pass.draw(0..3, 0..1);
         }
 
         // submit will accept anything that implements IntoIter
-        self.queue.submit(std::iter::once(encoder.finish()));
+        self.queue.submit(Some(encoder.finish()));
         current_texture.present();
 
         Ok(())
     }
 }
+

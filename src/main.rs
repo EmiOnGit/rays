@@ -1,7 +1,7 @@
 mod renderer;
 mod render_time;
 
-use log::info;
+use log::warn;
 use render_time::RenderTimeDiagnostic;
 use renderer::State;
 use winit::{
@@ -15,7 +15,6 @@ fn main() {
 }
 pub async fn run() {
     env_logger::init();
-
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
     let mut state = State::new(window).await;
@@ -37,8 +36,8 @@ pub async fn run() {
             let render_time = render_time_logger.increment();
             count = (count + 1) % 200;
             if count == 0 {
-                info!("render time: {:?} ms", render_time.0);
-                info!("avg render time: {:?} ms", render_time_logger.avg_render_time().0);
+                warn!("render time: {:?} ms", render_time.0);
+                warn!("avg render time: {:?} ms", render_time_logger.avg_render_time().0);
             }
             
         }

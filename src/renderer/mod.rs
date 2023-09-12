@@ -1,6 +1,8 @@
 mod render_pipeline;
 
-use image::GenericImageView;
+
+
+use image::{RgbaImage, Rgba};
 use log::info;
 use wgpu::{Label, PresentMode};
 use winit::{event::WindowEvent, window::Window};
@@ -10,14 +12,16 @@ use self::render_pipeline::RenderPipeline;
 pub struct State {
     /// Surface of the window we draw on
     surface: wgpu::Surface,
-
+    seed: u32,
     background_color: wgpu::Color,
     pub device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     pub size: winit::dpi::PhysicalSize<u32>,
     render_pipeline: RenderPipeline,
-    output_texture: wgpu::TextureView,
+    drawing_image: RgbaImage,
+    output_texture_view: wgpu::TextureView,
+    output_texture: wgpu::Texture,
     // The window must be declared after the surface so
     // it gets dropped after it as the surface contains
     // unsafe references to the window's resources.
@@ -91,7 +95,7 @@ impl State {
         let diffuse_bytes = include_bytes!("../../assets/wallpaper.jpg");
         let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
         let df = diffuse_image.to_rgba8();
-        let dimensions = diffuse_image.dimensions();
+        let dimensions = df.dimensions();
         let texture_size = wgpu::Extent3d {
             width: dimensions.0,
             height: dimensions.1,
@@ -127,11 +131,14 @@ impl State {
         surface,
         render_pipeline,
         device,
-        output_texture: output_texture_view,
+        output_texture,
+        seed: 0xffff1,
+        output_texture_view,
         background_color: wgpu::Color::BLUE,
         queue,
         config,
         size,
+        drawing_image: df,
     }
     }
     pub fn window(&self) -> &Window {
@@ -150,7 +157,33 @@ impl State {
     pub fn input(&mut self, _event: &WindowEvent) -> bool {
         false
     }
-    pub fn update(&mut self) {}
+    pub fn update(&mut self) {
+        let dimensions = self.drawing_image.dimensions();
+        for _i in 0..200 {
+            let x = self.rand() % dimensions.0;
+            let y =  self.rand() % dimensions.1;
+            self.drawing_image.put_pixel(x,y, Rgba::from([0xff,15,15,255]));
+        }
+        let texture_size = wgpu::Extent3d {
+            width: dimensions.0,
+            height: dimensions.1,
+            depth_or_array_layers: 1,
+        };
+        self.queue.write_texture(wgpu::ImageCopyTexture {
+            texture: &self.output_texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        }, 
+        &self.drawing_image, 
+        wgpu::ImageDataLayout {
+            offset: 0,
+            bytes_per_row: Some(4 * dimensions.0),
+            rows_per_image: Some(dimensions.1),
+        },
+        texture_size
+    );
+    }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         let current_texture = self.surface.get_current_texture()?;
@@ -168,7 +201,7 @@ impl State {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.output_texture),
+                    resource: wgpu::BindingResource::TextureView(&self.output_texture_view),
                 },
             ],
         });
@@ -188,7 +221,7 @@ impl State {
             
             render_pass.set_pipeline(&self.render_pipeline.pipeline);
             render_pass.set_bind_group(0, &render_bind_group, &[]);
-            render_pass.draw(0..3, 0..1);
+            render_pass.draw(0..6, 0..1);
         }
 
         // submit will accept anything that implements IntoIter
@@ -197,5 +230,24 @@ impl State {
 
         Ok(())
     }
+    // uses pcg hash
+    fn rand(&mut self) -> u32 {
+        let state = self.seed * 747779605 + 2891336453;
+        let word = ((state >> ((state >> 28) + 4)) ^ state) * 277803737;
+
+        self.seed = (word >> 22) ^ word;
+        self.seed
+    }
+}
+/// Returns a random float between 0 and 1
+pub fn rand(mut seed: u32) -> f32 {
+    seed = pcg_hash(seed);
+    seed as f32 / u32::MAX as f32
 }
 
+fn pcg_hash(seed: u32) -> u32 {
+    let state = seed * 747779605 + 2891336453;
+    let word = ((state >> ((state >> 28) + 4)) ^ state) * 277803737;
+
+    (word >> 22) ^ word
+}

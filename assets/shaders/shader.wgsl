@@ -11,15 +11,26 @@ fn vs_main(
     @builtin(vertex_index) in_vertex_index: u32,
 ) -> VertexOutput {
     var out: VertexOutput;
-    let x = f32(1 - i32(in_vertex_index)) * 0.5;
-    let y = f32(i32(in_vertex_index & 1u) * 2 - 1) * 0.5;
-    out.clip_position = vec4<f32>(x, y, 0.0, 1.0);
+   // -1 -1 = left bottom
+    var xy: vec2<f32>;
+    if (i32(in_vertex_index) == 0 || i32(in_vertex_index) == 5) {
+        xy = vec2<f32>(-1.,-1.);
+    }
+    else if (i32(in_vertex_index) == 1)  {
+    xy = vec2<f32>(1.,-1.);
+    }
+    else if (i32(in_vertex_index) == 2 || i32(in_vertex_index) == 3) {
+    xy = vec2<f32>(1.,1.);
+    }
+    else if (i32(in_vertex_index) == 4) {
+    xy = vec2<f32>(-1.,1.);
+    }
+    out.clip_position = vec4<f32>(xy, 0.0, 1.0);
     return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(textureLoad(tex, vec2<u32>(u32(in.clip_position.x), u32(in.clip_position.y)),0));
-    // return vec4<f32>(0.3, 0.2, 0.1, 1.0);
 }
  

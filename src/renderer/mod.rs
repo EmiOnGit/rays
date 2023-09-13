@@ -3,24 +3,29 @@ mod render_pipeline;
 use glam::Vec3;
 use image::{Rgba, RgbaImage};
 use log::info;
-use wgpu::{Label, PresentMode, Device, Texture, Queue};
+use rayon::prelude::{IntoParallelIterator, ParallelIterator, IndexedParallelIterator};
+use wgpu::{Device, Label, PresentMode, Texture};
 use winit::{event::WindowEvent, window::Window};
 
-use crate::math::{ray::Ray, color_f32_to_u8};
+use crate::{
+    camera::Camera,
+    math::{color_f32_to_u8, ray::Ray},
+};
 
 use self::render_pipeline::RenderPipeline;
 
 pub struct State {
     /// Surface of the window we draw on
     surface: wgpu::Surface,
-    background_color: wgpu::Color,
+    background_color: Rgba<u8>,
     pub device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     pub size: winit::dpi::PhysicalSize<u32>,
     render_pipeline: RenderPipeline,
     /// This buffer can be used to draw on
-    image_buffer: RgbaImage,
+    pub image_buffer: RgbaImage,
+    pub pixel_data: Vec<Rgba<u8>>,
     output_texture_view: wgpu::TextureView,
     output_texture: wgpu::Texture,
     // The window must be declared after the surface so
@@ -85,7 +90,7 @@ impl State {
             format: surface_format,
             width: size.width,
             height: size.height,
-            present_mode: PresentMode::AutoNoVsync,
+            present_mode: PresentMode::default(),
             alpha_mode: surface_capabilities.alpha_modes[0],
             view_formats: vec![],
         };
@@ -93,11 +98,11 @@ impl State {
         let render_pipeline = RenderPipeline::new(&device, &config);
 
         // output texture
-        let image_buffer = RgbaImage::from_pixel(size.width, size.width, Rgba([0,0,0,0]));
-        let output_texture = write_texture(&image_buffer, &device, &queue);
+        let image_buffer = RgbaImage::from_pixel(size.width, size.width, Rgba([0, 0, 0, 0]));
+        let output_texture = create_texture(&image_buffer, &device);
         let output_texture_view =
             output_texture.create_view(&wgpu::TextureViewDescriptor::default());
-       
+
         Self {
             window,
             surface,
@@ -105,11 +110,12 @@ impl State {
             device,
             output_texture,
             output_texture_view,
-            background_color: wgpu::Color::BLUE,
+            background_color: [0, 0, 0, 255].into(),
             queue,
             config,
             size,
             image_buffer,
+            pixel_data: Vec::new(),
         }
     }
     pub fn window(&self) -> &Window {
@@ -122,17 +128,16 @@ impl State {
             self.config.width = new_size.width;
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
+            self.image_buffer = RgbaImage::from_pixel(new_size.width, new_size.height, Rgba([0, 0, 0, 0]));
+            self.output_texture = create_texture(&self.image_buffer, &self.device);
+            self.output_texture_view =
+            self.output_texture.create_view(&wgpu::TextureViewDescriptor::default());
         }
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         let dimensions = self.image_buffer.dimensions();
 
-        let texture_size = wgpu::Extent3d {
-            width: dimensions.0,
-            height: dimensions.1,
-            depth_or_array_layers: 1,
-        };
         self.queue.write_texture(
             wgpu::ImageCopyTexture {
                 texture: &self.output_texture,
@@ -146,7 +151,7 @@ impl State {
                 bytes_per_row: Some(4 * dimensions.0),
                 rows_per_image: Some(dimensions.1),
             },
-            texture_size,
+            self.output_texture.size(),
         );
         let current_texture = self.surface.get_current_texture()?;
         let view = current_texture
@@ -172,7 +177,7 @@ impl State {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(self.background_color),
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         store: true,
                     },
                 })],
@@ -193,47 +198,55 @@ impl State {
     pub fn input(&mut self, _event: &WindowEvent) -> bool {
         false
     }
-    pub fn update(&mut self) {
-        let dimensions = self.image_buffer.dimensions();
-        for (x,y,p) in self.image_buffer.enumerate_pixels_mut() {
-            let x = x as f32 / dimensions.0 as f32;
-            let y = y as f32 / dimensions.1 as f32;
-            *p = color_f32_to_u8(update_pixel(x,y));
+    pub fn update(&mut self, camera: &Camera) {
+        let height = self.image_buffer.height();
+        let width = self.image_buffer.width();
+
+        (0..height * width).into_par_iter().map(|i| {
+            let Some(ray_direction) = camera.ray_directions.get(i as usize) else {
+                return self.background_color;
+            };
+
+            let ray = Ray::new(camera.position, *ray_direction);
+
+            match trace_ray(&ray) {
+                Some(color) => color_f32_to_u8(color),
+                None => self.background_color,
+            }
+        })
+        .collect_into_vec(&mut self.pixel_data);
+
+        for (i, pixel) in self.image_buffer.pixels_mut().enumerate() {
+            *pixel = self.pixel_data[i];
         }
+       
+
     }
-
-
 }
-fn update_pixel(x: f32, y: f32) -> Rgba<f32> {
-    let x = x * 2. - 1.; // map to -1 .. 1
-    let y = y * 2. - 1.; // map to -1 .. 1
-
-    let origin =  Vec3::Z;
-    let direction = Vec3::new(x, y, -1.);
-    let ray = Ray::new(origin, direction);
+fn trace_ray(ray: &Ray) -> Option<Rgba<f32>> {
     let radius = 0.5;
-    let light_dir = Vec3::new(-1.,-1.,-1.).normalize();
-
-    let a = direction.dot(direction);
-    let b = 2. * origin.dot(direction);
-    let c = origin.dot(origin) - radius * radius;
+    let a = ray.direction.dot(ray.direction);
+    let b = 2. * ray.origin.dot(ray.direction);
+    let c = ray.origin.dot(ray.origin) - radius * radius;
     let discriminant = b * b - 4. * a * c;
-
     if discriminant < 0. {
-        return Rgba([0.7,0.6,0.6,1.])
+        return None;
     }
+
+    let light_dir = Vec3::new(-1., -1., -1.).normalize();
+
     // let t0 = (-b + discriminant.sqrt()) / (2. * a);
     let closest_t = (-b - discriminant.sqrt()) / (2. * a);
     // let h0 = ray.at(t0);
     let hit_point = ray.at(closest_t);
     let normal = hit_point.normalize();
     let d = normal.dot(-light_dir).max(0.);
-    let mut color = Vec3::new(1.,0.,1.);
+    let mut color = Vec3::new(1., 1., 1.);
     color *= d;
-    Rgba([color.x, color.y, color.z, 1.])
+    Some(Rgba([color.x, color.y, color.z, 1.]))
 }
 
-fn write_texture(image_buffer: &RgbaImage, device: &Device, queue: &Queue) -> Texture {
+fn create_texture(image_buffer: &RgbaImage, device: &Device) -> Texture {
     let texture_size = wgpu::Extent3d {
         width: image_buffer.width(),
         height: image_buffer.height(),
@@ -249,21 +262,6 @@ fn write_texture(image_buffer: &RgbaImage, device: &Device, queue: &Queue) -> Te
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
     });
-   
-    queue.write_texture(
-        wgpu::ImageCopyTexture {
-            texture: &output_texture,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-            aspect: wgpu::TextureAspect::All,
-        },
-        &image_buffer,
-        wgpu::ImageDataLayout {
-            offset: 0,
-            bytes_per_row: Some(4 * image_buffer.width()),
-            rows_per_image: Some(image_buffer.height()),
-        },
-        texture_size,
-    );
+
     output_texture
 }

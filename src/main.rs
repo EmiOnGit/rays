@@ -1,7 +1,9 @@
+mod camera;
+mod math;
 mod render_time;
 mod renderer;
-mod math;
 
+use camera::Camera;
 use log::warn;
 use render_time::RenderTimeDiagnostic;
 use renderer::State;
@@ -21,9 +23,11 @@ pub async fn run() {
     let mut state = State::new(window).await;
     let mut render_time_logger = RenderTimeDiagnostic::new();
     let mut count = 0;
+    let mut camera = Camera::new(45., 0.1, 100.,state.image_buffer.width() as f32,state.image_buffer.height() as f32);
+    let mut mouse_pressed = false;
     event_loop.run(move |event, _, control_flow| match event {
         Event::RedrawRequested(window_id) if window_id == state.window().id() => {
-            state.update();
+            state.update(&camera);
             match state.render() {
                 Ok(_) => {}
                 // Reconfigure the surface if lost
@@ -56,8 +60,25 @@ pub async fn run() {
                 return;
             }
             match event {
+                WindowEvent::MouseInput { button, state, .. } => {
+                    if &MouseButton::Right == button {
+                        match state {
+                            ElementState::Pressed => mouse_pressed = true,
+                            ElementState::Released => mouse_pressed = false,
+                        }
+                    }
+                }
+                WindowEvent::CursorMoved { position, .. } => {
+                    if mouse_pressed {
+                        camera.on_rotate(position);
+                    } else {
+                        camera.last_mouse_position = None;
+                    }
+                }
                 WindowEvent::Resized(physical_size) => {
                     state.resize(*physical_size);
+                    camera.resize(physical_size.width, physical_size.height);
+
                 }
                 WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
                     state.resize(**new_inner_size);
@@ -72,6 +93,9 @@ pub async fn run() {
                         },
                     ..
                 } => *control_flow = ControlFlow::Exit,
+                WindowEvent::KeyboardInput { input, .. } => {
+                    camera.on_keyboard_event(input);
+                }
                 _ => {}
             }
         }

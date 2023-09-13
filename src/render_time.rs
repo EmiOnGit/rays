@@ -20,6 +20,11 @@ impl RenderTimeDiagnostic {
         self.prev_time = current;
         RenderTime(delta.as_secs_f32() * 1000.)
     }
+    pub fn peak(&self) -> RenderTime {
+        let current = Instant::now();
+        let delta = current - self.prev_time;
+        RenderTime(delta.as_secs_f32() * 1000.)
+    }
     pub fn avg_render_time(&self) -> RenderTime {
         let delta = self.prev_time - self.start_time;
         let avg = delta.as_secs_f32() / self.frame as f32 * 1000.;

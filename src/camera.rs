@@ -26,8 +26,8 @@ pub struct Camera {
 
 impl Camera {
     pub fn new(fov: f32, near_clip: f32, far_clip: f32, viewport_width: f32, viewport_height: f32) -> Camera {
-        let forward = -Vec3::Z;
-        let position = 3.* Vec3::Z;
+        let forward = Vec3::Z;
+        let position = -3.* Vec3::Z;
 
         let mut camera = Camera {
             forward,
@@ -60,8 +60,8 @@ impl Camera {
 
         self.calculate_ray_directions();
     }
-    pub fn on_keyboard_event(&mut self, input: &KeyboardInput) {
-        let speed = 0.1;
+    pub fn on_keyboard_event(&mut self, input: &KeyboardInput, dt: f32) {
+        let speed = 5. * dt;
         let up = Vec3::Y;
 	    let right_direction = self.forward.cross(up);
         match input.virtual_keycode {

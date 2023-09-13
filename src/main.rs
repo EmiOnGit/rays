@@ -2,11 +2,14 @@ mod camera;
 mod math;
 mod render_time;
 mod renderer;
+mod scene;
+mod app;
 
 use camera::Camera;
 use log::warn;
 use render_time::RenderTimeDiagnostic;
-use renderer::State;
+use renderer::Renderer;
+use scene::Scene;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -20,14 +23,15 @@ pub async fn run() {
     env_logger::init();
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
-    let mut state = State::new(window).await;
-    let mut render_time_logger = RenderTimeDiagnostic::new();
+    let mut state = Renderer::new(window).await;
+    let mut render_timer = RenderTimeDiagnostic::new();
     let mut count = 0;
     let mut camera = Camera::new(45., 0.1, 100.,state.image_buffer.width() as f32,state.image_buffer.height() as f32);
     let mut mouse_pressed = false;
+    let mut scene = Scene::example_scene();
     event_loop.run(move |event, _, control_flow| match event {
         Event::RedrawRequested(window_id) if window_id == state.window().id() => {
-            state.update(&camera);
+            state.update(&camera, &scene);
             match state.render() {
                 Ok(_) => {}
                 // Reconfigure the surface if lost
@@ -37,13 +41,13 @@ pub async fn run() {
                 // All other errors (Outdated, Timeout) should be resolved by the next frame
                 Err(e) => eprintln!("{:?}", e),
             }
-            let render_time = render_time_logger.increment();
+            let render_time = render_timer.increment();
             count = (count + 1) % 200;
             if count == 0 {
                 warn!("render time: {:?} ms", render_time.0);
                 warn!(
                     "avg render time: {:?} ms",
-                    render_time_logger.avg_render_time().0
+                    render_timer.avg_render_time().0
                 );
             }
         }
@@ -94,7 +98,7 @@ pub async fn run() {
                     ..
                 } => *control_flow = ControlFlow::Exit,
                 WindowEvent::KeyboardInput { input, .. } => {
-                    camera.on_keyboard_event(input);
+                    camera.on_keyboard_event(input, render_timer.peak().0);
                 }
                 _ => {}
             }

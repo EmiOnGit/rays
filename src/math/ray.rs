@@ -1,5 +1,5 @@
 use glam::Vec3;
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Ray {
     pub origin: Vec3,
     pub direction: Vec3,

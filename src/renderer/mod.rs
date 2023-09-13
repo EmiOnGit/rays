@@ -1,20 +1,21 @@
 mod render_pipeline;
+pub mod sphere;
+pub mod material;
 
 use glam::Vec3;
-use image::{Rgba, RgbaImage};
+use image::{Rgba, RgbaImage, Pixel};
 use log::info;
-use rayon::prelude::{IntoParallelIterator, ParallelIterator, IndexedParallelIterator};
+use rayon::prelude::{ParallelIterator, IndexedParallelIterator, IntoParallelRefIterator, IntoParallelIterator};
 use wgpu::{Device, Label, PresentMode, Texture};
 use winit::{event::WindowEvent, window::Window};
 
 use crate::{
     camera::Camera,
-    math::{color_f32_to_u8, ray::Ray},
+    math::{color_f32_to_u8, ray::Ray}, scene::Scene,
 };
 
 use self::render_pipeline::RenderPipeline;
-
-pub struct State {
+pub struct Renderer {
     /// Surface of the window we draw on
     surface: wgpu::Surface,
     background_color: Rgba<u8>,
@@ -25,7 +26,6 @@ pub struct State {
     render_pipeline: RenderPipeline,
     /// This buffer can be used to draw on
     pub image_buffer: RgbaImage,
-    pub pixel_data: Vec<Rgba<u8>>,
     output_texture_view: wgpu::TextureView,
     output_texture: wgpu::Texture,
     // The window must be declared after the surface so
@@ -34,7 +34,7 @@ pub struct State {
     window: Window,
 }
 
-impl State {
+impl Renderer {
     // Creating some of the wgpu types requires async code
     pub async fn new(window: Window) -> Self {
         let size = window.inner_size();
@@ -90,7 +90,7 @@ impl State {
             format: surface_format,
             width: size.width,
             height: size.height,
-            present_mode: PresentMode::default(),
+            present_mode: PresentMode::Mailbox,
             alpha_mode: surface_capabilities.alpha_modes[0],
             view_formats: vec![],
         };
@@ -115,7 +115,6 @@ impl State {
             config,
             size,
             image_buffer,
-            pixel_data: Vec::new(),
         }
     }
     pub fn window(&self) -> &Window {
@@ -198,52 +197,63 @@ impl State {
     pub fn input(&mut self, _event: &WindowEvent) -> bool {
         false
     }
-    pub fn update(&mut self, camera: &Camera) {
-        let height = self.image_buffer.height();
-        let width = self.image_buffer.width();
+    pub fn update(&mut self, camera: &Camera, scene: &Scene) {
 
-        (0..height * width).into_par_iter().map(|i| {
-            let Some(ray_direction) = camera.ray_directions.get(i as usize) else {
-                return self.background_color;
-            };
-
+        let mut colors = Vec::with_capacity(camera.ray_directions.len());
+            camera.ray_directions.par_iter().map(|ray_direction| {
             let ray = Ray::new(camera.position, *ray_direction);
 
-            match trace_ray(&ray) {
+            match trace_ray(ray, scene) {
                 Some(color) => color_f32_to_u8(color),
                 None => self.background_color,
             }
-        })
-        .collect_into_vec(&mut self.pixel_data);
+        }).collect_into_vec(&mut colors);
+        
 
         for (i, pixel) in self.image_buffer.pixels_mut().enumerate() {
-            *pixel = self.pixel_data[i];
+            *pixel = colors[i];
         }
        
 
     }
 }
-fn trace_ray(ray: &Ray) -> Option<Rgba<f32>> {
-    let radius = 0.5;
-    let a = ray.direction.dot(ray.direction);
-    let b = 2. * ray.origin.dot(ray.direction);
-    let c = ray.origin.dot(ray.origin) - radius * radius;
-    let discriminant = b * b - 4. * a * c;
-    if discriminant < 0. {
-        return None;
+fn trace_ray(ray: Ray, scene: &Scene) -> Option<Rgba<f32>> {
+    
+    let mut hit_distance = f32::MAX;
+    let mut closest_sphere = None;
+  
+    for sphere in &scene.spheres[..] {
+        let ray_d = Ray::new(ray.origin - sphere.center, ray.direction);
+        let a = ray_d.direction.dot(ray_d.direction);
+        let b = 2. * ray_d.origin.dot(ray_d.direction);
+        let c = ray_d.origin.dot(ray_d.origin) - sphere.radius * sphere.radius;
+        let discriminant = b * b - 4. * a * c;
+        if discriminant < 0. {
+            continue;
+        }
+        // let t0 = (-b + discriminant.sqrt()) / (2. * a);
+        let closest_t = (-b - discriminant.sqrt()) / (2. * a);
+        if closest_t > 0. && closest_t < hit_distance {
+            hit_distance = closest_t;
+            closest_sphere = Some(sphere);
+        }
     }
+    let Some(sphere) = closest_sphere else {
+        return None;
+    };
+    let ray_d = Ray::new(ray.origin - sphere.center, ray.direction);
+    
 
-    let light_dir = Vec3::new(-1., -1., -1.).normalize();
+    let light_dir = Vec3::new(1.,1.,1.).normalize();
 
-    // let t0 = (-b + discriminant.sqrt()) / (2. * a);
-    let closest_t = (-b - discriminant.sqrt()) / (2. * a);
+    
     // let h0 = ray.at(t0);
-    let hit_point = ray.at(closest_t);
+    let hit_point = ray_d.at(hit_distance);
     let normal = hit_point.normalize();
     let d = normal.dot(-light_dir).max(0.);
-    let mut color = Vec3::new(1., 1., 1.);
-    color *= d;
-    Some(Rgba([color.x, color.y, color.z, 1.]))
+    let mut color = sphere.albedo;
+    color.apply_without_alpha(|c|c * d) ;
+    Some(color)
 }
 
 fn create_texture(image_buffer: &RgbaImage, device: &Device) -> Texture {

@@ -7,7 +7,11 @@ pub struct RenderTimeDiagnostic {
 }
 impl RenderTimeDiagnostic {
     pub fn new() -> RenderTimeDiagnostic {
-        RenderTimeDiagnostic { start_time: Instant::now(), prev_time: Instant::now(), frame: 0 }
+        RenderTimeDiagnostic {
+            start_time: Instant::now(),
+            prev_time: Instant::now(),
+            frame: 0,
+        }
     }
     pub fn increment(&mut self) -> RenderTime {
         self.frame += 1;
@@ -15,7 +19,6 @@ impl RenderTimeDiagnostic {
         let delta = current - self.prev_time;
         self.prev_time = current;
         RenderTime(delta.as_secs_f32() * 1000.)
-
     }
     pub fn avg_render_time(&self) -> RenderTime {
         let delta = self.prev_time - self.start_time;
@@ -25,4 +28,3 @@ impl RenderTimeDiagnostic {
 }
 /// Render time in ms
 pub struct RenderTime(pub f32);
-

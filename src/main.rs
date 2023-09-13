@@ -1,5 +1,6 @@
-mod renderer;
 mod render_time;
+mod renderer;
+mod math;
 
 use log::warn;
 use render_time::RenderTimeDiagnostic;
@@ -22,7 +23,6 @@ pub async fn run() {
     let mut count = 0;
     event_loop.run(move |event, _, control_flow| match event {
         Event::RedrawRequested(window_id) if window_id == state.window().id() => {
-
             state.update();
             match state.render() {
                 Ok(_) => {}
@@ -37,9 +37,11 @@ pub async fn run() {
             count = (count + 1) % 200;
             if count == 0 {
                 warn!("render time: {:?} ms", render_time.0);
-                warn!("avg render time: {:?} ms", render_time_logger.avg_render_time().0);
+                warn!(
+                    "avg render time: {:?} ms",
+                    render_time_logger.avg_render_time().0
+                );
             }
-            
         }
         Event::MainEventsCleared => {
             // RedrawRequested will only trigger once, unless we manually

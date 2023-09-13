@@ -1,25 +1,26 @@
 mod render_pipeline;
 
-
-
-use image::{RgbaImage, Rgba};
+use glam::Vec3;
+use image::{Rgba, RgbaImage};
 use log::info;
-use wgpu::{Label, PresentMode};
+use wgpu::{Label, PresentMode, Device, Texture, Queue};
 use winit::{event::WindowEvent, window::Window};
+
+use crate::math::{ray::Ray, color_f32_to_u8};
 
 use self::render_pipeline::RenderPipeline;
 
 pub struct State {
     /// Surface of the window we draw on
     surface: wgpu::Surface,
-    seed: u32,
     background_color: wgpu::Color,
     pub device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     pub size: winit::dpi::PhysicalSize<u32>,
     render_pipeline: RenderPipeline,
-    drawing_image: RgbaImage,
+    /// This buffer can be used to draw on
+    image_buffer: RgbaImage,
     output_texture_view: wgpu::TextureView,
     output_texture: wgpu::Texture,
     // The window must be declared after the surface so
@@ -90,56 +91,26 @@ impl State {
         };
         surface.configure(&device, &config);
         let render_pipeline = RenderPipeline::new(&device, &config);
-        
-        // output texture 
-        let diffuse_bytes = include_bytes!("../../assets/wallpaper.jpg");
-        let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
-        let df = diffuse_image.to_rgba8();
-        let dimensions = df.dimensions();
-        let texture_size = wgpu::Extent3d {
-            width: dimensions.0,
-            height: dimensions.1,
-            depth_or_array_layers: 1,
-        };
-        let output_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Output texture"),
-            size: texture_size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-        let output_texture_view = output_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        queue.write_texture(wgpu::ImageCopyTexture {
-            texture: &output_texture,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-            aspect: wgpu::TextureAspect::All,
-        }, 
-        &df, 
-        wgpu::ImageDataLayout {
-            offset: 0,
-            bytes_per_row: Some(4 * dimensions.0),
-            rows_per_image: Some(dimensions.1),
-        },
-        texture_size
-    );
-    Self {
-        window,
-        surface,
-        render_pipeline,
-        device,
-        output_texture,
-        seed: 0xffff1,
-        output_texture_view,
-        background_color: wgpu::Color::BLUE,
-        queue,
-        config,
-        size,
-        drawing_image: df,
-    }
+
+        // output texture
+        let image_buffer = RgbaImage::from_pixel(size.width, size.width, Rgba([0,0,0,0]));
+        let output_texture = write_texture(&image_buffer, &device, &queue);
+        let output_texture_view =
+            output_texture.create_view(&wgpu::TextureViewDescriptor::default());
+       
+        Self {
+            window,
+            surface,
+            render_pipeline,
+            device,
+            output_texture,
+            output_texture_view,
+            background_color: wgpu::Color::BLUE,
+            queue,
+            config,
+            size,
+            image_buffer,
+        }
     }
     pub fn window(&self) -> &Window {
         &self.window
@@ -154,38 +125,29 @@ impl State {
         }
     }
 
-    pub fn input(&mut self, _event: &WindowEvent) -> bool {
-        false
-    }
-    pub fn update(&mut self) {
-        let dimensions = self.drawing_image.dimensions();
-        for _i in 0..200 {
-            let x = self.rand() % dimensions.0;
-            let y =  self.rand() % dimensions.1;
-            self.drawing_image.put_pixel(x,y, Rgba::from([0xff,15,15,255]));
-        }
+    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+        let dimensions = self.image_buffer.dimensions();
+
         let texture_size = wgpu::Extent3d {
             width: dimensions.0,
             height: dimensions.1,
             depth_or_array_layers: 1,
         };
-        self.queue.write_texture(wgpu::ImageCopyTexture {
-            texture: &self.output_texture,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-            aspect: wgpu::TextureAspect::All,
-        }, 
-        &self.drawing_image, 
-        wgpu::ImageDataLayout {
-            offset: 0,
-            bytes_per_row: Some(4 * dimensions.0),
-            rows_per_image: Some(dimensions.1),
-        },
-        texture_size
-    );
-    }
-
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+        self.queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &self.output_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &self.image_buffer,
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * dimensions.0),
+                rows_per_image: Some(dimensions.1),
+            },
+            texture_size,
+        );
         let current_texture = self.surface.get_current_texture()?;
         let view = current_texture
             .texture
@@ -198,12 +160,10 @@ impl State {
         let render_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Render bind group"),
             layout: &self.render_pipeline.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.output_texture_view),
-                },
-            ],
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&self.output_texture_view),
+            }],
         });
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -218,7 +178,7 @@ impl State {
                 })],
                 depth_stencil_attachment: None,
             });
-            
+
             render_pass.set_pipeline(&self.render_pipeline.pipeline);
             render_pass.set_bind_group(0, &render_bind_group, &[]);
             render_pass.draw(0..6, 0..1);
@@ -230,24 +190,80 @@ impl State {
 
         Ok(())
     }
-    // uses pcg hash
-    fn rand(&mut self) -> u32 {
-        let state = self.seed * 747779605 + 2891336453;
-        let word = ((state >> ((state >> 28) + 4)) ^ state) * 277803737;
-
-        self.seed = (word >> 22) ^ word;
-        self.seed
+    pub fn input(&mut self, _event: &WindowEvent) -> bool {
+        false
     }
+    pub fn update(&mut self) {
+        let dimensions = self.image_buffer.dimensions();
+        for (x,y,p) in self.image_buffer.enumerate_pixels_mut() {
+            let x = x as f32 / dimensions.0 as f32;
+            let y = y as f32 / dimensions.1 as f32;
+            *p = color_f32_to_u8(update_pixel(x,y));
+        }
+    }
+
+
 }
-/// Returns a random float between 0 and 1
-pub fn rand(mut seed: u32) -> f32 {
-    seed = pcg_hash(seed);
-    seed as f32 / u32::MAX as f32
+fn update_pixel(x: f32, y: f32) -> Rgba<f32> {
+    let x = x * 2. - 1.; // map to -1 .. 1
+    let y = y * 2. - 1.; // map to -1 .. 1
+
+    let origin =  Vec3::Z;
+    let direction = Vec3::new(x, y, -1.);
+    let ray = Ray::new(origin, direction);
+    let radius = 0.5;
+    let light_dir = Vec3::new(-1.,-1.,-1.).normalize();
+
+    let a = direction.dot(direction);
+    let b = 2. * origin.dot(direction);
+    let c = origin.dot(origin) - radius * radius;
+    let discriminant = b * b - 4. * a * c;
+
+    if discriminant < 0. {
+        return Rgba([0.7,0.6,0.6,1.])
+    }
+    // let t0 = (-b + discriminant.sqrt()) / (2. * a);
+    let closest_t = (-b - discriminant.sqrt()) / (2. * a);
+    // let h0 = ray.at(t0);
+    let hit_point = ray.at(closest_t);
+    let normal = hit_point.normalize();
+    let d = normal.dot(-light_dir).max(0.);
+    let mut color = Vec3::new(1.,0.,1.);
+    color *= d;
+    Rgba([color.x, color.y, color.z, 1.])
 }
 
-fn pcg_hash(seed: u32) -> u32 {
-    let state = seed * 747779605 + 2891336453;
-    let word = ((state >> ((state >> 28) + 4)) ^ state) * 277803737;
-
-    (word >> 22) ^ word
+fn write_texture(image_buffer: &RgbaImage, device: &Device, queue: &Queue) -> Texture {
+    let texture_size = wgpu::Extent3d {
+        width: image_buffer.width(),
+        height: image_buffer.height(),
+        depth_or_array_layers: 1,
+    };
+    let output_texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("Output texture"),
+        size: texture_size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+   
+    queue.write_texture(
+        wgpu::ImageCopyTexture {
+            texture: &output_texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        &image_buffer,
+        wgpu::ImageDataLayout {
+            offset: 0,
+            bytes_per_row: Some(4 * image_buffer.width()),
+            rows_per_image: Some(image_buffer.height()),
+        },
+        texture_size,
+    );
+    output_texture
 }

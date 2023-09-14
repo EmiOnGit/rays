@@ -50,7 +50,9 @@ impl Renderer {
             let sphere = &scene.spheres[payload.index];
             let material = scene.material(sphere);
             ray.origin = payload.world_position - payload.world_normal * 0.0001;
-            ray.direction = (math::in_unit_sphere(self.seed ^ payload.hit_distance.to_bits()) + payload.world_normal) / 2.;
+            ray.direction = (math::in_unit_sphere(self.seed ^ payload.hit_distance.to_bits())
+                + payload.world_normal)
+                / 2.;
             // albedo.apply(|c| c  * contribution);
             // light += Vec3::from(albedo.0);
             contribution *= Vec3::from(material.albedo.0);

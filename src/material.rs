@@ -17,7 +17,7 @@ impl Default for Material {
             albedo: Rgb([1., 0.6, 0.6]),
             roughness: Default::default(),
             metallic: Default::default(),
-            emission_color: Vec3::new(r,g,b),
+            emission_color: Vec3::new(r, g, b),
             emission_power: 1.,
         }
     }
@@ -34,7 +34,7 @@ impl Material {
             ..Default::default()
         }
     }
-    pub fn get_emission(&self) -> Vec3{
+    pub fn get_emission(&self) -> Vec3 {
         self.emission_power * self.emission_color
     }
 }

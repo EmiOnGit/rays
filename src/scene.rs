@@ -16,7 +16,7 @@ impl Scene {
             Sphere::new(Vec3::new(1., 100., 3.), 99.1, 2),
         ];
         let materials = vec![
-            Material::new([0.9, 0.9, 0.1], 0.4, 0.9, 0.,),
+            Material::new([0.9, 0.9, 0.1], 0.4, 0.9, 0.),
             Material::new([0.0, 1.0, 1.0], 0.01, 0.9, 3.0),
             Material::new([0.2, 0.2, 0.2], 1., 0.9, 0.),
         ];

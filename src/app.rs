@@ -192,8 +192,8 @@ impl App {
     }
     pub fn update(&mut self) {
         self.timer.update();
-
         self.renderer.render(&self.camera, &self.scene);
+        self.renderer.update_image_buffer();
     }
     pub fn window(&self) -> &Window {
         &self.window

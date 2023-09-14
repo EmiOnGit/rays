@@ -21,11 +21,13 @@ impl Renderer {
 
         for (i, pixel) in self.acc_buffer.pixels_mut().enumerate() {
             let c = colors[i];
-            *pixel = [pixel.0[0] + c[0], pixel.0[1] + c[1], pixel.0[2] + c[2]].into();
+            *pixel = [pixel.0[0] + c[0], pixel.0[1] + c[1], pixel.0[2] + c[2], pixel.0[3]].into();
         }
+        
+    }
+    pub fn update_image_buffer(&mut self) {
         let mut i = self.acc_buffer.clone();
         image_util::iter_mut_image_buffer(&mut i).for_each(|pixel| {
-            assert_ne!(self.acc_frame, 0);
             *pixel = *pixel / self.acc_frame as f32;
         });
 
@@ -35,14 +37,14 @@ impl Renderer {
     pub fn per_pixel(&self, x: usize, y: usize, camera: &Camera, scene: &Scene) -> Rgb<f32> {
         let direction = camera.ray_directions[x + y * self.size().width as usize];
         let mut ray = Ray::new(camera.position, direction);
-        let bounces = 10;
+        let bounces = 8;
         let mut light = Vec3::ZERO;
         let mut contribution = Vec3::ONE;
         let mut bounced = bounces;
         for i in 0..bounces {
             let payload = self.trace_ray(ray.clone(), scene);
             let Some(payload) = payload else {
-                let sky_color = Vec3::new(0.00, 0.00, 0.005);
+                let sky_color = Vec3::new(0.012, 0.012, 0.015);
                 light += sky_color * contribution;
                 bounced = i + 1;
                 break;
@@ -50,7 +52,7 @@ impl Renderer {
             let sphere = &scene.spheres[payload.index];
             let material = scene.material(sphere);
             ray.origin = payload.world_position - payload.world_normal * 0.0001;
-            ray.direction = (math::in_unit_sphere(self.seed ^ payload.hit_distance.to_bits())
+            ray.direction = (math::in_unit_sphere(self.seed ^ payload.hit_distance.to_bits().wrapping_mul(payload.index as u32 * 11 + 10))
                 + payload.world_normal)
                 / 2.;
             // albedo.apply(|c| c  * contribution);
@@ -75,7 +77,6 @@ impl Renderer {
             if discriminant < 0. {
                 continue;
             }
-            // let t0 = (-b + discriminant.sqrt()) / (2. * a);
             let closest_t = (-b - discriminant.sqrt()) / (2. * a);
             if closest_t > 0. && closest_t < hit_distance {
                 hit_distance = closest_t;
@@ -98,7 +99,6 @@ impl Renderer {
         let sphere = &scene.spheres[object_index];
         let origin = ray.origin - sphere.center;
         ray.origin = origin;
-        // let h0 = ray.at(t0);
         let hit_point = ray.at(hit_distance);
         let world_normal = hit_point.normalize();
         HitPayload {

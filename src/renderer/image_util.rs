@@ -1,4 +1,4 @@
-use image::Rgb32FImage;
+use image::Rgba32FImage;
 use itertools::Itertools;
 #[cfg(feature = "rayon")]
 use rayon::prelude::IntoParallelIterator;
@@ -23,13 +23,13 @@ impl From<ImageSize> for Extent3d {
     }
 }
 #[cfg(feature = "rayon")]
-pub fn iter_mut_image_buffer(image_buffer: &mut Rgb32FImage) -> rayon::slice::IterMut<f32> {
+pub fn iter_mut_image_buffer(image_buffer: &mut Rgba32FImage) -> rayon::slice::IterMut<f32> {
     use rayon::prelude::IntoParallelRefMutIterator;
 
     image_buffer.par_iter_mut()
 }
 #[cfg(not(feature = "rayon"))]
-pub fn iter_mut_image_buffer(image_buffer: &mut Rgb32FImage) -> std::slice::IterMut<f32> {
+pub fn iter_mut_image_buffer(image_buffer: &mut Rgba32FImage) -> std::slice::IterMut<f32> {
     image_buffer.iter_mut()
 }
 impl ImageSize {

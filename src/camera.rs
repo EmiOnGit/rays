@@ -35,8 +35,8 @@ impl Camera {
         viewport_width: f32,
         viewport_height: f32,
     ) -> Camera {
-        let forward = Vec3::Z;
-        let position = -7. * Vec3::Z;
+        let forward = Vec3::Z + Vec3::Y * 0.5;
+        let position = -22. * Vec3::Z - 10. *  Vec3::Y;
 
         let mut camera = Camera {
             forward,
@@ -159,7 +159,7 @@ impl Camera {
         let fov = self.fov.to_radians();
         self.projection = Mat4::perspective_rh(
             fov,
-            self.viewport_height / self.viewport_width,
+            self.viewport_width / self.viewport_height,
             self.near_clip,
             self.far_clip,
         );

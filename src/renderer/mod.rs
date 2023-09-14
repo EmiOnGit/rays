@@ -2,7 +2,7 @@ pub mod image_util;
 mod render;
 pub mod render_pipeline;
 
-use image::{Rgb, Rgb32FImage, Rgba, Rgba32FImage};
+use image::{Rgba, Rgba32FImage};
 use log::warn;
 use wgpu::{Device, Texture};
 use winit::dpi::PhysicalSize;
@@ -12,7 +12,7 @@ use self::image_util::ImageSize;
 pub struct Renderer {
     /// This buffer can be used to draw on
     pub image_buffer: Rgba32FImage,
-    acc_buffer: Rgb32FImage,
+    acc_buffer: Rgba32FImage,
     acc_frame: usize,
     seed: u32,
 }
@@ -22,7 +22,7 @@ impl Renderer {
         // output texture
         let image_buffer =
             Rgba32FImage::from_pixel(size.width, size.height, Rgba([0., 0., 0., 0.]));
-        let acc_buffer = Rgb32FImage::from_pixel(size.width, size.height, Rgb([0., 0., 0.]));
+        let acc_buffer = Rgba32FImage::from_pixel(size.width, size.height, Rgba([0., 0., 0., 0.]));
         Self {
             image_buffer,
             acc_buffer,
@@ -45,7 +45,7 @@ impl Renderer {
         );
         self.acc_frame = 0;
         self.acc_buffer =
-            Rgb32FImage::from_pixel(new_size.width, new_size.height, Rgb([0., 0., 0.]));
+        Rgba32FImage::from_pixel(new_size.width, new_size.height, Rgba([0., 0., 0., 0.]));
         self.image_buffer =
             Rgba32FImage::from_pixel(new_size.width, new_size.height, Rgba([0., 0., 0., 0.]));
     }

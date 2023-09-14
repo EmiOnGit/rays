@@ -25,8 +25,9 @@ pub fn cross(q1: Quat, q2: Quat) -> Quat {
 }
 pub fn in_unit_sphere(seed: u32) -> Vec3 {
     let seed2 = pcg_hash(seed);
+    let seed3 = pcg_hash(seed2);
     let x = rand(seed);
-    let y = rand(seed ^ seed2);
-    let z = rand(seed2);
+    let y = rand(seed2);
+    let z = rand(seed3);
     Vec3::new(x * 2. - 1., y * 2. - 1., z * 2. - 1.).normalize()
 }

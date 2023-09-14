@@ -1,23 +1,24 @@
-use glam::Vec3;
-use image::{DynamicImage, Pixel, Rgb};
-#[cfg(feature = "rayon")]
-use rayon::prelude::ParallelIterator;
 use crate::{
     camera::Camera,
     math::{self, ray::Ray},
     scene::Scene,
 };
+use glam::Vec3;
+use image::{DynamicImage, Pixel, Rgb};
+#[cfg(feature = "rayon")]
+use rayon::prelude::ParallelIterator;
 
-use super::{Renderer, image_util};
+use super::{image_util, Renderer};
 
 impl Renderer {
     pub fn render(&mut self, camera: &Camera, scene: &Scene) {
         self.acc_frame = self.acc_frame + 1;
-        let colors: Vec<Rgb<f32>> = self.size()
+        let colors: Vec<Rgb<f32>> = self
+            .size()
             .into_iter()
             .map(|(y, x)| self.per_pixel(x, y, camera, scene))
             .collect();
-        
+
         for (i, pixel) in self.acc_buffer.pixels_mut().enumerate() {
             let c = colors[i];
             *pixel = [pixel.0[0] + c[0], pixel.0[1] + c[1], pixel.0[2] + c[2]].into();
@@ -27,7 +28,7 @@ impl Renderer {
             assert_ne!(self.acc_frame, 0);
             *pixel = *pixel / self.acc_frame as f32;
         });
-        
+
         self.image_buffer = DynamicImage::from(i).into_rgba32f();
         self.seed = math::pcg_hash(self.seed);
     }
@@ -53,7 +54,7 @@ impl Renderer {
             let r2 = math::rand((r1 * f32::MAX).to_bits()) - 0.5;
             let r3 = math::rand((r2 * f32::MAX).to_bits()) - 0.5;
             let n = payload.world_normal + mat.roughness * Vec3::new(r1, r2, r3);
-            
+
             ray.direction = ray.direction - 2. * (ray.direction.dot(n) * n);
             let light_dir = Vec3::new(1., 1., 1.).normalize();
             let light_intensity = payload.world_normal.normalize().dot(-light_dir).max(0.);

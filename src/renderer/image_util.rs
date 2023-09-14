@@ -1,9 +1,8 @@
-
+use image::Rgb32FImage;
 use itertools::Itertools;
 #[cfg(feature = "rayon")]
 use rayon::prelude::IntoParallelIterator;
 use wgpu::Extent3d;
-use image::Rgb32FImage;
 
 pub struct ImageSize {
     pub width: u32,
@@ -31,7 +30,6 @@ pub fn iter_mut_image_buffer(image_buffer: &mut Rgb32FImage) -> rayon::slice::It
 }
 #[cfg(not(feature = "rayon"))]
 pub fn iter_mut_image_buffer(image_buffer: &mut Rgb32FImage) -> std::slice::IterMut<f32> {
-
     image_buffer.iter_mut()
 }
 impl ImageSize {
@@ -48,6 +46,5 @@ impl ImageSize {
             .cartesian_product(0..self.width as usize)
             .collect::<Vec<(usize, usize)>>()
             .into_iter()
-            
     }
 }

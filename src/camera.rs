@@ -128,13 +128,12 @@ impl Camera {
                 (self.inverse_view * Vec4::new(target.x, target.y, target.z, 0.)).xyz()
             })
             .collect_into_vec(&mut self.ray_directions);
-        
     }
     #[cfg(not(feature = "rayon"))]
     fn calculate_ray_directions(&mut self) {
         let height = self.viewport_height as usize;
         let width = self.viewport_width as usize;
-        
+
         self.ray_directions = (0..height * width)
             .into_iter()
             .map(|i| {

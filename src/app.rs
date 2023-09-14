@@ -193,8 +193,7 @@ impl App {
     pub fn update(&mut self) {
         self.timer.update();
 
-        self.renderer
-            .render(&self.camera, &self.scene);
+        self.renderer.render(&self.camera, &self.scene);
     }
     pub fn window(&self) -> &Window {
         &self.window

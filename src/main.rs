@@ -1,9 +1,9 @@
 mod app;
 mod camera;
 mod math;
-mod timer;
 mod renderer;
 mod scene;
+mod timer;
 
 use app::App;
 use log::warn;
@@ -35,7 +35,6 @@ pub async fn run() {
                 Err(e) => eprintln!("{:?}", e),
             }
             app.queue();
-            
         }
         Event::MainEventsCleared => {
             app.update();

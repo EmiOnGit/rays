@@ -34,14 +34,26 @@ impl Timer {
     }
     fn log(&self) {
         if self.frame_count % self.log_frequency != 0 {
-            return
+            return;
         }
         let i_last = self.log_frequency - 1;
-        let avg = self.frame_starts[i_last].duration_since(self.frame_starts[0]).as_secs_f32() * 1000. / self.log_frequency as f32;
-        let avg_total = self.frame_starts[i_last].duration_since(self.app_start).as_secs_f32() * 1000. / self.frame_count as f32;
-        let current = self.frame_starts[i_last].duration_since(self.frame_starts[i_last - 1]).as_secs_f32() * 1000.;
-        info!("avg {}: {:.2}ms, avg total: {:.2}ms, current: {:.2}ms", self.log_frequency, avg, avg_total, current);
+        let avg = self.frame_starts[i_last]
+            .duration_since(self.frame_starts[0])
+            .as_secs_f32()
+            * 1000.
+            / self.log_frequency as f32;
+        let avg_total = self.frame_starts[i_last]
+            .duration_since(self.app_start)
+            .as_secs_f32()
+            * 1000.
+            / self.frame_count as f32;
+        let current = self.frame_starts[i_last]
+            .duration_since(self.frame_starts[i_last - 1])
+            .as_secs_f32()
+            * 1000.;
+        info!(
+            "avg {}: {:.2}ms, avg total: {:.2}ms, current: {:.2}ms",
+            self.log_frequency, avg, avg_total, current
+        );
     }
-   
-    
 }

@@ -11,7 +11,8 @@ use winit::{
 use crate::{
     camera::Camera,
     renderer::{render_pipeline::RenderPipeline, Renderer},
-    scene::Scene, timer::Timer,
+    scene::Scene,
+    timer::Timer,
 };
 
 pub struct App {
@@ -29,7 +30,7 @@ pub struct App {
     pub camera: Camera,
     scene: Scene,
     render_pipeline: RenderPipeline,
-    timer: Timer
+    timer: Timer,
 }
 impl App {
     pub async fn new(window: Window) -> Self {

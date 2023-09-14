@@ -193,7 +193,7 @@ impl App {
         self.timer.update();
 
         self.renderer
-            .render(&self.camera, &self.scene, self.timer.dt());
+            .render(&self.camera, &self.scene);
     }
     pub fn window(&self) -> &Window {
         &self.window

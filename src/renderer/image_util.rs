@@ -1,6 +1,9 @@
+
 use itertools::Itertools;
-use rayon::{prelude::IntoParallelIterator, vec::IntoIter};
+#[cfg(feature = "rayon")]
+use rayon::prelude::IntoParallelIterator;
 use wgpu::Extent3d;
+use image::Rgb32FImage;
 
 pub struct ImageSize {
     pub width: u32,
@@ -20,12 +23,31 @@ impl From<ImageSize> for Extent3d {
         }
     }
 }
+#[cfg(feature = "rayon")]
+pub fn iter_mut_image_buffer(image_buffer: &mut Rgb32FImage) -> rayon::slice::IterMut<f32> {
+    use rayon::prelude::IntoParallelRefMutIterator;
 
+    image_buffer.par_iter_mut()
+}
+#[cfg(not(feature = "rayon"))]
+pub fn iter_mut_image_buffer(image_buffer: &mut Rgb32FImage) -> std::slice::IterMut<f32> {
+
+    image_buffer.iter_mut()
+}
 impl ImageSize {
-    pub fn into_par_iter(self) -> IntoIter<(usize, usize)> {
+    #[cfg(feature = "rayon")]
+    pub fn into_iter(self) -> rayon::vec::IntoIter<(usize, usize)> {
         (0..self.height as usize)
             .cartesian_product(0..self.width as usize)
             .collect::<Vec<(usize, usize)>>()
             .into_par_iter()
+    }
+    #[cfg(not(feature = "rayon"))]
+    pub fn into_iter(self) -> std::vec::IntoIter<(usize, usize)> {
+        (0..self.height as usize)
+            .cartesian_product(0..self.width as usize)
+            .collect::<Vec<(usize, usize)>>()
+            .into_iter()
+            
     }
 }

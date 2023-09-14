@@ -1,34 +1,35 @@
-use glam::{Quat, Vec3};
+use glam::Vec3;
 use image::{DynamicImage, Pixel, Rgb};
-use rayon::prelude::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
-
+#[cfg(feature = "rayon")]
+use rayon::prelude::ParallelIterator;
 use crate::{
     camera::Camera,
     math::{self, ray::Ray},
     scene::Scene,
 };
 
-use super::Renderer;
+use super::{Renderer, image_util};
 
 impl Renderer {
-    pub fn render(&mut self, camera: &Camera, scene: &Scene, dt: f32) {
+    pub fn render(&mut self, camera: &Camera, scene: &Scene) {
         self.acc_frame = self.acc_frame + 1;
-        let mut colors = Vec::with_capacity(camera.ray_directions.len());
-        self.size()
-            .into_par_iter()
+        let colors: Vec<Rgb<f32>> = self.size()
+            .into_iter()
             .map(|(y, x)| self.per_pixel(x, y, camera, scene))
-            .collect_into_vec(&mut colors);
+            .collect();
+        
         for (i, pixel) in self.acc_buffer.pixels_mut().enumerate() {
             let c = colors[i];
             *pixel = [pixel.0[0] + c[0], pixel.0[1] + c[1], pixel.0[2] + c[2]].into();
         }
         let mut i = self.acc_buffer.clone();
-        i.par_iter_mut().for_each(|pixel| {
+        image_util::iter_mut_image_buffer(&mut i).for_each(|pixel| {
             assert_ne!(self.acc_frame, 0);
             *pixel = *pixel / self.acc_frame as f32;
         });
+        
         self.image_buffer = DynamicImage::from(i).into_rgba8();
-        self.seed = math::pcg_hash(self.seed.wrapping_add(dt.to_bits()));
+        self.seed = math::pcg_hash(self.seed);
     }
     pub fn per_pixel(&self, x: usize, y: usize, camera: &Camera, scene: &Scene) -> Rgb<f32> {
         let direction = camera.ray_directions[x + y * self.size().width as usize];
@@ -51,11 +52,9 @@ impl Renderer {
             let r1 = math::rand(payload.hit_distance.to_bits() + self.seed) - 0.5;
             let r2 = math::rand((r1 * f32::MAX).to_bits()) - 0.5;
             let r3 = math::rand((r2 * f32::MAX).to_bits()) - 0.5;
-            let r = Quat::from_rotation_arc(
-                ray.direction.normalize(),
-                payload.world_normal.normalize() + mat.roughness * Vec3::new(r1, r2, r3),
-            );
-            ray.direction = r * ray.direction.normalize();
+            let n = payload.world_normal + mat.roughness * Vec3::new(r1, r2, r3);
+            
+            ray.direction = ray.direction - 2. * (ray.direction.dot(n) * n);
             let light_dir = Vec3::new(1., 1., 1.).normalize();
             let light_intensity = payload.world_normal.normalize().dot(-light_dir).max(0.);
             let mut color = scene.material(sphere).albedo;

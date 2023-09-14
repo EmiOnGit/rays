@@ -1,5 +1,5 @@
 use glam::{Mat4, Quat, Vec2, Vec3, Vec4, Vec4Swizzles};
-
+#[cfg(feature = "rayon")]
 use rayon::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
@@ -107,9 +107,11 @@ impl Camera {
             None => self.last_mouse_position = Some(*mouse_position),
         }
     }
+    #[cfg(feature = "rayon")]
     fn calculate_ray_directions(&mut self) {
         let height = self.viewport_height as usize;
         let width = self.viewport_width as usize;
+        #[cfg(feature = "rayon")]
         (0..height * width)
             .into_par_iter()
             .map(|i| {
@@ -125,7 +127,30 @@ impl Camera {
 
                 (self.inverse_view * Vec4::new(target.x, target.y, target.z, 0.)).xyz()
             })
-            .collect_into_vec(&mut self.ray_directions)
+            .collect_into_vec(&mut self.ray_directions);
+        
+    }
+    #[cfg(not(feature = "rayon"))]
+    fn calculate_ray_directions(&mut self) {
+        let height = self.viewport_height as usize;
+        let width = self.viewport_width as usize;
+        
+        self.ray_directions = (0..height * width)
+            .into_iter()
+            .map(|i| {
+                let x = i % width;
+                let y = i / width;
+                let mut coord = Vec2::new(
+                    x as f32 / self.viewport_width,
+                    y as f32 / self.viewport_height,
+                );
+                coord = coord * 2. - Vec2::ONE;
+                let target = self.inverse_projection * Vec4::new(coord.x, coord.y, 1., 1.);
+                let target = (target.xyz() / target.w).normalize();
+
+                (self.inverse_view * Vec4::new(target.x, target.y, target.z, 0.)).xyz()
+            })
+            .collect();
     }
     fn recalculate_view(&mut self) {
         self.view = Mat4::look_at_rh(self.position, self.position + self.forward, Vec3::Y);

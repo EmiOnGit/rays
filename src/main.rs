@@ -6,8 +6,6 @@ mod scene;
 mod timer;
 
 use app::App;
-use log::warn;
-use timer::Timer;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -27,8 +25,6 @@ pub async fn run() {
         Event::RedrawRequested(window_id) if window_id == app.window().id() => {
             match app.prepare() {
                 Ok(_) => {}
-                // Reconfigure the surface if lost
-                // Err(wgpu::SurfaceError::Lost) => app.resize(app.size),
                 // The system is out of memory, we should probably quit
                 Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
                 // All other errors (Outdated, Timeout) should be resolved by the next frame

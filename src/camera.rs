@@ -101,9 +101,9 @@ impl Camera {
                 self.forward = q * self.forward;
                 self.recalculate_view();
                 self.calculate_ray_directions();
-                self.last_mouse_position = Some(mouse_position.clone());
+                self.last_mouse_position = Some(*mouse_position);
             }
-            None => self.last_mouse_position = Some(mouse_position.clone()),
+            None => self.last_mouse_position = Some(*mouse_position),
         }
     }
     fn calculate_ray_directions(&mut self) {
@@ -121,9 +121,8 @@ impl Camera {
                 coord = coord * 2. - Vec2::ONE;
                 let target = self.inverse_projection * Vec4::new(coord.x, coord.y, 1., 1.);
                 let target = (target.xyz() / target.w).normalize();
-                let direction =
-                    (self.inverse_view * Vec4::new(target.x, target.y, target.z, 0.)).xyz();
-                direction
+                
+                (self.inverse_view * Vec4::new(target.x, target.y, target.z, 0.)).xyz()
             })
             .collect_into_vec(&mut self.ray_directions)
     }

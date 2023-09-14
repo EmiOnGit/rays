@@ -8,8 +8,8 @@ pub fn rand(mut seed: u32) -> f32 {
 }
 
 pub fn pcg_hash(seed: u32) -> u32 {
-    let state = seed * 747779605 + 2891336453;
-    let word = ((state >> ((state >> 28) + 4)) ^ state) * 277803737;
+    let state = seed.wrapping_mul(747779605).wrapping_add(2891336453);
+    let word = ((state >> ((state >> 28) + 4)) ^ state).wrapping_mul(277803737);
 
     (word >> 22) ^ word
 }

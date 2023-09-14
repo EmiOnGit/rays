@@ -28,7 +28,7 @@ impl Renderer {
             *pixel = *pixel / self.acc_frame as f32;
         });
         
-        self.image_buffer = DynamicImage::from(i).into_rgba8();
+        self.image_buffer = DynamicImage::from(i).into_rgba32f();
         self.seed = math::pcg_hash(self.seed);
     }
     pub fn per_pixel(&self, x: usize, y: usize, camera: &Camera, scene: &Scene) -> Rgb<f32> {
@@ -49,7 +49,7 @@ impl Renderer {
 
             let mat = scene.material(sphere);
             ray.origin = payload.world_position - payload.world_normal * 0.0001;
-            let r1 = math::rand(payload.hit_distance.to_bits() + self.seed) - 0.5;
+            let r1 = math::rand(payload.hit_distance.to_bits() ^ self.seed) - 0.5;
             let r2 = math::rand((r1 * f32::MAX).to_bits()) - 0.5;
             let r3 = math::rand((r2 * f32::MAX).to_bits()) - 0.5;
             let n = payload.world_normal + mat.roughness * Vec3::new(r1, r2, r3);

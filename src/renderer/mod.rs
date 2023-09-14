@@ -2,7 +2,7 @@ pub mod image_util;
 mod render;
 pub mod render_pipeline;
 
-use image::{Rgb, Rgb32FImage, Rgba, RgbaImage};
+use image::{Rgb, Rgb32FImage, Rgba, RgbaImage, Rgba32FImage};
 use log::warn;
 use wgpu::{Device, Texture};
 use winit::dpi::PhysicalSize;
@@ -11,7 +11,7 @@ use self::image_util::ImageSize;
 
 pub struct Renderer {
     /// This buffer can be used to draw on
-    pub image_buffer: RgbaImage,
+    pub image_buffer: Rgba32FImage,
     acc_buffer: Rgb32FImage,
     acc_frame: usize,
     seed: u32,
@@ -20,7 +20,7 @@ pub struct Renderer {
 impl Renderer {
     pub fn new(size: PhysicalSize<u32>) -> Self {
         // output texture
-        let image_buffer = RgbaImage::from_pixel(size.width, size.height, Rgba([0, 0, 0, 0]));
+        let image_buffer = Rgba32FImage::from_pixel(size.width, size.height, Rgba([0., 0., 0., 0.]));
         let acc_buffer = Rgb32FImage::from_pixel(size.width, size.height, Rgb([0., 0., 0.]));
         Self {
             image_buffer,
@@ -33,7 +33,7 @@ impl Renderer {
         let dimensions = self.image_buffer.dimensions();
         ImageSize::new(dimensions.0, dimensions.1)
     }
-    pub fn get_image(&self) -> &RgbaImage {
+    pub fn get_image(&self) -> &Rgba32FImage {
         &self.image_buffer
     }
 
@@ -46,7 +46,7 @@ impl Renderer {
         self.acc_buffer =
             Rgb32FImage::from_pixel(new_size.width, new_size.height, Rgb([0., 0., 0.]));
         self.image_buffer =
-            RgbaImage::from_pixel(new_size.width, new_size.height, Rgba([0, 0, 0, 0]));
+        Rgba32FImage::from_pixel(new_size.width, new_size.height, Rgba([0., 0., 0., 0.]));
     }
     pub fn reset_acc(&mut self) {
         self.acc_frame = 0;
@@ -61,7 +61,7 @@ impl Renderer {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format: wgpu::TextureFormat::Rgba32Float,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         })

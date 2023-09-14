@@ -1,5 +1,6 @@
 use std::iter::{self};
 
+use image::EncodableLayout;
 use log::info;
 use wgpu::{Features, Label, Limits, PresentMode, SurfaceConfiguration};
 use winit::{
@@ -137,10 +138,10 @@ impl App {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            self.renderer.get_image(),
+            self.renderer.get_image().as_bytes(),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(4 * size.width),
+                bytes_per_row: Some(4 * 4 * size.width),
                 rows_per_image: Some(size.height),
             },
             size.into(),

@@ -1,3 +1,6 @@
 /target
 perf.data*
 flamegraph*
+
+log
+*perf

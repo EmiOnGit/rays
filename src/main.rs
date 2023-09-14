@@ -4,6 +4,8 @@ mod math;
 mod renderer;
 mod scene;
 mod timer;
+pub mod material;
+pub mod sphere;
 
 use app::App;
 use winit::{

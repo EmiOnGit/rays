@@ -1,6 +1,4 @@
-pub mod material;
 pub mod render_pipeline;
-pub mod sphere;
 
 use glam::Vec3;
 use image::{Pixel, Rgba, RgbaImage};

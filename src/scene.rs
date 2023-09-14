@@ -1,7 +1,7 @@
 use glam::Vec3;
 use image::Rgba;
 
-use crate::renderer::{material::Material, sphere::Sphere};
+use crate::{material::Material, sphere::Sphere};
 #[derive(Default)]
 pub struct Scene {
     pub spheres: Vec<Sphere>,

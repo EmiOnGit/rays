@@ -6,6 +6,7 @@ use glam::Vec3;
 use image::{Pixel, Rgba, RgbaImage};
 use log::warn;
 use rayon::prelude::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use wgpu::{Device, Extent3d, Texture};
 use winit::dpi::PhysicalSize;
 
 use crate::{
@@ -27,7 +28,10 @@ impl Renderer {
         let image_buffer = RgbaImage::from_pixel(size.width, size.height, Rgba([0, 0, 0, 0]));
         Self { image_buffer }
     }
-
+    pub fn size(&self) -> ImageSize {
+        let dimensions = self.image_buffer.dimensions();
+        ImageSize::new(dimensions.0, dimensions.1)
+    }
     pub fn get_image(&self) -> &RgbaImage {
         &self.image_buffer
     }
@@ -60,12 +64,25 @@ impl Renderer {
             *pixel = colors[i];
         }
     }
+
+    pub fn create_input_texture(&self, device: &Device) -> Texture {
+        device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Input texture"),
+            size: self.size().into(),
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        })
+    }
 }
 fn trace_ray(ray: Ray, scene: &Scene) -> Option<Rgba<f32>> {
     let mut hit_distance = f32::MAX;
     let mut closest_sphere = None;
 
-    for sphere in &scene.spheres[..] {
+    for sphere in &scene.spheres {
         let ray_d = Ray::new(ray.origin - sphere.center, ray.direction);
         let a = ray_d.direction.dot(ray_d.direction);
         let b = 2. * ray_d.origin.dot(ray_d.direction);
@@ -95,4 +112,22 @@ fn trace_ray(ray: Ray, scene: &Scene) -> Option<Rgba<f32>> {
     let mut color = sphere.albedo;
     color.apply_without_alpha(|c| c * d);
     Some(color)
+}
+pub struct ImageSize {
+    pub width: u32,
+    pub height: u32,
+}
+impl ImageSize {
+    pub fn new(width: u32, height: u32) -> ImageSize {
+        ImageSize { width, height }
+    }
+}
+impl From<ImageSize> for Extent3d {
+    fn from(value: ImageSize) -> Self {
+        Extent3d {
+            width: value.width,
+            height: value.height,
+            depth_or_array_layers: 1,
+        }
+    }
 }

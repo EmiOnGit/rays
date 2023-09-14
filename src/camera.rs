@@ -110,7 +110,7 @@ impl Camera {
         // for (y,x) in  (0..self.viewport_height as usize).cartesian_product(0..self.viewport_width as usize).collect::<Vec<(usize,usize)>>().into_par_iter(){
         let height = self.viewport_height as usize;
         let width = self.viewport_width as usize;
-        println!("creating {} ray directions", height * width);
+        // println!("creating {} ray directions", height * width);
         (0..height * width)
             .into_par_iter()
             .map(|i| {

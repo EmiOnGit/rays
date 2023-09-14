@@ -27,7 +27,6 @@ pub async fn run() {
     let mut mouse_pressed = false;
     event_loop.run(move |event, _, control_flow| match event {
         Event::RedrawRequested(window_id) if window_id == app.window().id() => {
-            app.update();
             match app.prepare() {
                 Ok(_) => {}
                 // Reconfigure the surface if lost

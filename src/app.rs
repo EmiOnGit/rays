@@ -1,6 +1,7 @@
-use image::{Rgba, RgbaImage};
+use std::iter::{self};
+
 use log::info;
-use wgpu::{Device, Features, Label, Limits, PresentMode, SurfaceConfiguration, Texture};
+use wgpu::{Features, Label, Limits, PresentMode, SurfaceConfiguration};
 use winit::{
     dpi::PhysicalSize,
     event::{KeyboardInput, WindowEvent},
@@ -89,21 +90,15 @@ impl App {
             view_formats: vec![],
         };
         surface.configure(&device, &surface_config);
-        // output texture
-        let image_buffer = RgbaImage::from_pixel(size.width, size.width, Rgba([0, 0, 0, 0]));
-        let output_texture = create_input_texture(&image_buffer, &device);
-        let output_texture_view =
-            output_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let render_pipeline = RenderPipeline::new(
-            &device,
-            &surface_config,
-            output_texture_view,
-            output_texture,
-        );
+        let renderer = Renderer::new(size);
+
+        let input_texture = renderer.create_input_texture(&device);
+        let input_texture_view = input_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let render_pipeline =
+            RenderPipeline::new(&device, &surface_config, input_texture_view, input_texture);
 
         let camera = Camera::new(45., 0.1, 100., size.width as f32, size.height as f32);
         let scene = Scene::example_scene();
-        let renderer = Renderer::new(size);
         Self {
             window,
             surface,
@@ -125,10 +120,11 @@ impl App {
         self.surface_config.height = new_size.height;
         self.surface_config.width = new_size.width;
         self.surface.configure(&self.device, &self.surface_config);
+        let input_texture = self.renderer.create_input_texture(&self.device);
+        self.render_pipeline.set_input_texture(input_texture)
     }
     pub fn queue(&mut self) {
-        let image = self.renderer.get_image();
-        let dimensions = image.dimensions();
+        let size = self.renderer.size();
 
         self.queue.write_texture(
             wgpu::ImageCopyTexture {
@@ -137,13 +133,13 @@ impl App {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            image,
+            self.renderer.get_image(),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(4 * dimensions.0),
-                rows_per_image: Some(dimensions.1),
+                bytes_per_row: Some(4 * size.width),
+                rows_per_image: Some(size.height),
             },
-            self.render_pipeline.input_texture.size(),
+            size.into(),
         );
         let mut encoder = self
             .device
@@ -171,7 +167,7 @@ impl App {
             render_pass.draw(0..6, 0..1);
         }
         // submit will accept anything that implements IntoIter
-        self.queue.submit(Some(encoder.finish()));
+        self.queue.submit(iter::once(encoder.finish()));
         self.render_pipeline
             .surface_texture
             .take()
@@ -180,12 +176,12 @@ impl App {
     }
 
     pub fn prepare(&mut self) -> Result<(), wgpu::SurfaceError> {
-        let image = self.renderer.get_image();
-        let input_texture = create_input_texture(image, &self.device);
+        let input_texture = self.renderer.create_input_texture(&self.device);
+        self.render_pipeline.set_input_texture(input_texture);
 
         let surface_texture = self.surface.get_current_texture()?;
-        self.render_pipeline.set_input_texture(input_texture);
-        self.render_pipeline.set_surface_texture(surface_texture);
+        self.render_pipeline.surface_texture = Some(surface_texture);
+
         self.render_pipeline.prepare_bind_group(&self.device);
         Ok(())
     }
@@ -201,24 +197,4 @@ impl App {
     pub fn handle_keyboard_input(&mut self, input: &KeyboardInput) {
         self.camera.on_keyboard_event(input, 1.);
     }
-}
-
-fn create_input_texture(image_buffer: &RgbaImage, device: &Device) -> Texture {
-    let texture_size = wgpu::Extent3d {
-        width: image_buffer.width(),
-        height: image_buffer.height(),
-        depth_or_array_layers: 1,
-    };
-    let output_texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("Output texture"),
-        size: texture_size,
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8UnormSrgb,
-        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        view_formats: &[],
-    });
-
-    output_texture
 }

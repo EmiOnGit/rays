@@ -16,8 +16,8 @@ impl RenderPipeline {
     pub fn new(
         device: &wgpu::Device,
         config: &SurfaceConfiguration,
-        texture_view: TextureView,
-        texture: Texture,
+        input_texture_view: TextureView,
+        input_texture: Texture,
     ) -> RenderPipeline {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -89,8 +89,8 @@ impl RenderPipeline {
         RenderPipeline {
             pipeline,
             bind_group_layout,
-            input_texture_view: texture_view,
-            input_texture: texture,
+            input_texture_view,
+            input_texture,
             surface_texture: None,
             bind_group: None,
         }
@@ -99,9 +99,7 @@ impl RenderPipeline {
         self.input_texture_view = texture.create_view(&TextureViewDescriptor::default());
         self.input_texture = texture;
     }
-    pub fn set_surface_texture(&mut self, surface_texture: SurfaceTexture) {
-        self.surface_texture = Some(surface_texture);
-    }
+
     pub fn surface_texture_view(&self) -> TextureView {
         self.surface_texture
             .as_ref()

@@ -72,7 +72,7 @@ impl Camera {
         self.calculate_ray_directions();
     }
     pub fn on_keyboard_event(&mut self, input: &KeyboardInput, dt: f32) {
-        let speed = 5. * dt;
+        let speed = 20. * dt;
         let up = Vec3::Y;
         let right_direction = self.forward.cross(up);
         match input.virtual_keycode {

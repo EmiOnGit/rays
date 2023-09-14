@@ -11,7 +11,7 @@ use winit::{
 use crate::{
     camera::Camera,
     renderer::{render_pipeline::RenderPipeline, Renderer},
-    scene::Scene,
+    scene::Scene, timer::Timer,
 };
 
 pub struct App {
@@ -29,6 +29,7 @@ pub struct App {
     pub camera: Camera,
     scene: Scene,
     render_pipeline: RenderPipeline,
+    timer: Timer
 }
 impl App {
     pub async fn new(window: Window) -> Self {
@@ -99,12 +100,14 @@ impl App {
 
         let camera = Camera::new(45., 0.1, 100., size.width as f32, size.height as f32);
         let scene = Scene::example_scene();
+        let timer = Timer::new();
         Self {
             window,
             surface,
             device,
             render_pipeline,
             surface_config,
+            timer,
             queue,
             camera,
             renderer,
@@ -187,6 +190,7 @@ impl App {
     }
     pub fn update(&mut self) {
         self.renderer.render(&self.camera, &self.scene);
+        self.timer.update();
     }
     pub fn window(&self) -> &Window {
         &self.window
@@ -195,6 +199,6 @@ impl App {
         false
     }
     pub fn handle_keyboard_input(&mut self, input: &KeyboardInput) {
-        self.camera.on_keyboard_event(input, 1.);
+        self.camera.on_keyboard_event(input, self.timer.dt());
     }
 }

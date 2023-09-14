@@ -1,13 +1,13 @@
 mod app;
 mod camera;
 mod math;
-mod render_time;
+mod timer;
 mod renderer;
 mod scene;
 
 use app::App;
 use log::warn;
-use render_time::RenderTimeDiagnostic;
+use timer::Timer;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -22,8 +22,6 @@ pub async fn run() {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
     let mut app = App::new(window).await;
-    let mut render_timer = RenderTimeDiagnostic::new();
-    let mut count = 0;
     let mut mouse_pressed = false;
     event_loop.run(move |event, _, control_flow| match event {
         Event::RedrawRequested(window_id) if window_id == app.window().id() => {
@@ -37,18 +35,12 @@ pub async fn run() {
                 Err(e) => eprintln!("{:?}", e),
             }
             app.queue();
-            let render_time = render_timer.increment();
-            count = (count + 1) % 200;
-            if count == 0 {
-                warn!("render time: {:?} ms", render_time.0);
-                warn!("avg render time: {:?} ms", render_timer.avg_render_time().0);
-            }
+            
         }
         Event::MainEventsCleared => {
+            app.update();
             // RedrawRequested will only trigger once, unless we manually
             // request it.
-
-            app.update();
             app.window().request_redraw();
         }
         Event::WindowEvent {

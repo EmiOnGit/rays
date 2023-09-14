@@ -1,11 +1,11 @@
 mod app;
 mod camera;
+pub mod material;
 mod math;
 mod renderer;
 mod scene;
-mod timer;
-pub mod material;
 pub mod sphere;
+mod timer;
 
 use app::App;
 use winit::{

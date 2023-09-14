@@ -22,7 +22,9 @@ impl Timer {
         self.log();
     }
     pub fn dt(&self) -> f32 {
-        let dt = Instant::now().duration_since(self.frame_starts[self.log_frequency - 2]);
+        let len = self.frame_starts.len();
+
+        let dt = Instant::now().duration_since(self.frame_starts[len - 2]);
         dt.as_secs_f32()
     }
     fn increment_frame(&mut self) {

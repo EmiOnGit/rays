@@ -1,5 +1,4 @@
 use glam::Vec3;
-use image::Rgba;
 
 use crate::{material::Material, sphere::Sphere};
 #[derive(Default)]
@@ -10,12 +9,20 @@ pub struct Scene {
 
 impl Scene {
     pub fn example_scene() -> Scene {
-        let sphere1 = Sphere::new(Vec3::ZERO, 0.5);
-        let mut sphere2 = Sphere::new(Vec3::new(-1., -0.5, 3.), 1.);
-        sphere2.albedo = Rgba([0.9, 0.0, 0.1, 1.]);
-        Scene {
-            spheres: vec![sphere1, sphere2],
-            materials: Vec::new(),
-        }
+        let spheres = vec![
+            Sphere::new(Vec3::ZERO, 1., 0),
+            Sphere::new(Vec3::new(-1., 0.5, -2.), 0.5, 1),
+            Sphere::new(Vec3::new(1., -1., 3.), 2., 0),
+            Sphere::new(Vec3::new(1., 101.0, 3.), 100., 2),
+        ];
+        let materials = vec![
+            Material::new([0.9, 0.0, 0.1], 0.00, 0.9),
+            Material::new([0.9, 0.5, 0.1], 0.002, 0.9),
+            Material::new([0.9, 0.9, 0.9], 0.01, 0.9),
+        ];
+        Scene { spheres, materials }
+    }
+    pub fn material(&self, sphere: &Sphere) -> &Material {
+        &(&self.materials)[sphere.material_index]
     }
 }

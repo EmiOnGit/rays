@@ -36,7 +36,7 @@ impl Camera {
         viewport_height: f32,
     ) -> Camera {
         let forward = Vec3::Z;
-        let position = -3. * Vec3::Z;
+        let position = -7. * Vec3::Z;
 
         let mut camera = Camera {
             forward,
@@ -121,7 +121,7 @@ impl Camera {
                 coord = coord * 2. - Vec2::ONE;
                 let target = self.inverse_projection * Vec4::new(coord.x, coord.y, 1., 1.);
                 let target = (target.xyz() / target.w).normalize();
-                
+
                 (self.inverse_view * Vec4::new(target.x, target.y, target.z, 0.)).xyz()
             })
             .collect_into_vec(&mut self.ray_directions)

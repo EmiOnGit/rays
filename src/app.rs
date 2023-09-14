@@ -92,15 +92,14 @@ impl App {
             view_formats: vec![],
         };
         surface.configure(&device, &surface_config);
+        let camera = Camera::new(45., 0.1, 100., size.width as f32, size.height as f32);
+        let scene = Scene::example_scene();
         let renderer = Renderer::new(size);
 
         let input_texture = renderer.create_input_texture(&device);
         let input_texture_view = input_texture.create_view(&wgpu::TextureViewDescriptor::default());
         let render_pipeline =
             RenderPipeline::new(&device, &surface_config, input_texture_view, input_texture);
-
-        let camera = Camera::new(45., 0.1, 100., size.width as f32, size.height as f32);
-        let scene = Scene::example_scene();
         let timer = Timer::new();
         Self {
             window,
@@ -190,8 +189,10 @@ impl App {
         Ok(())
     }
     pub fn update(&mut self) {
-        self.renderer.render(&self.camera, &self.scene);
         self.timer.update();
+
+        self.renderer
+            .render(&self.camera, &self.scene, self.timer.dt());
     }
     pub fn window(&self) -> &Window {
         &self.window

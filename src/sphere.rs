@@ -1,18 +1,17 @@
 use glam::Vec3;
-use image::Rgba;
 
 pub struct Sphere {
     pub center: Vec3,
     pub radius: f32,
-    pub albedo: Rgba<f32>,
+    pub material_index: usize,
 }
 
 impl Sphere {
-    pub fn new(center: Vec3, radius: f32) -> Sphere {
+    pub fn new(center: Vec3, radius: f32, material_index: usize) -> Sphere {
         Sphere {
             center,
             radius,
-            albedo: Rgba([1., 0., 1., 1.]),
+            material_index,
         }
     }
 }

@@ -121,7 +121,7 @@ impl App {
         self.surface_config.width = new_size.width;
         self.surface.configure(&self.device, &self.surface_config);
         let input_texture = self.renderer.create_input_texture(&self.device);
-        self.render_pipeline.set_input_texture(input_texture)
+        self.render_pipeline.set_input_texture(input_texture);
     }
     pub fn queue(&mut self) {
         let size = self.renderer.size();

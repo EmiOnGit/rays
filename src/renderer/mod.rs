@@ -36,7 +36,7 @@ impl Renderer {
         &self.image_buffer
     }
 
-    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+    pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
         warn!(
             "image buffer now has size: {}",
             self.image_buffer.pixels().len()

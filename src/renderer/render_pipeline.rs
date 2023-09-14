@@ -108,15 +108,13 @@ impl RenderPipeline {
             .create_view(&TextureViewDescriptor::default())
     }
     pub fn prepare_bind_group(&mut self, device: &Device) {
-        if self.bind_group.is_none() {
-            self.bind_group = Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("Render bind group"),
-                layout: &self.bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.input_texture_view),
-                }],
-            }));
-        }
+        self.bind_group = Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Render bind group"),
+            layout: &self.bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&self.input_texture_view),
+            }],
+        }));
     }
 }

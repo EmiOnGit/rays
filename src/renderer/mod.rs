@@ -1,17 +1,19 @@
 pub mod render_pipeline;
+pub mod image_util;
+mod render;
 
 use glam::Vec3;
-use image::{Pixel, Rgba, RgbaImage};
+use image::{RgbaImage, Rgba, Pixel};
 use log::warn;
-use rayon::prelude::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
-use wgpu::{Device, Extent3d, Texture};
+use wgpu::{Device, Texture};
 use winit::dpi::PhysicalSize;
 
 use crate::{
-    camera::Camera,
-    math::{color_f32_to_u8, ray::Ray},
+    math::ray::Ray,
     scene::Scene,
 };
+
+use self::image_util::ImageSize;
 
 pub struct Renderer {
     /// This buffer can be used to draw on
@@ -43,25 +45,7 @@ impl Renderer {
             RgbaImage::from_pixel(new_size.width, new_size.height, Rgba([0, 0, 0, 0]));
     }
 
-    pub fn render(&mut self, camera: &Camera, scene: &Scene) {
-        let mut colors = Vec::with_capacity(camera.ray_directions.len());
-        camera
-            .ray_directions
-            .par_iter()
-            .map(|ray_direction| {
-                let ray = Ray::new(camera.position, *ray_direction);
-
-                match trace_ray(ray, scene) {
-                    Some(color) => color_f32_to_u8(color),
-                    None => Self::BACKGROUND_COLOR,
-                }
-            })
-            .collect_into_vec(&mut colors);
-
-        for (i, pixel) in self.image_buffer.pixels_mut().enumerate() {
-            *pixel = colors[i];
-        }
-    }
+    
 
     pub fn create_input_texture(&self, device: &Device) -> Texture {
         device.create_texture(&wgpu::TextureDescriptor {
@@ -110,22 +94,4 @@ fn trace_ray(ray: Ray, scene: &Scene) -> Option<Rgba<f32>> {
     let mut color = sphere.albedo;
     color.apply_without_alpha(|c| c * d);
     Some(color)
-}
-pub struct ImageSize {
-    pub width: u32,
-    pub height: u32,
-}
-impl ImageSize {
-    pub fn new(width: u32, height: u32) -> ImageSize {
-        ImageSize { width, height }
-    }
-}
-impl From<ImageSize> for Extent3d {
-    fn from(value: ImageSize) -> Self {
-        Extent3d {
-            width: value.width,
-            height: value.height,
-            depth_or_array_layers: 1,
-        }
-    }
 }

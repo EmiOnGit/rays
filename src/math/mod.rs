@@ -1,5 +1,4 @@
 use glam::{Quat, Vec4, Vec4Swizzles};
-use image::Rgba;
 
 pub mod ray;
 /// Returns a random float between 0 and 1
@@ -14,14 +13,7 @@ fn pcg_hash(seed: u32) -> u32 {
 
     (word >> 22) ^ word
 }
-pub fn color_f32_to_u8(c: Rgba<f32>) -> Rgba<u8> {
-    Rgba([
-        (c[0] * 255.) as u8,
-        (c[1] * 255.) as u8,
-        (c[2] * 255.) as u8,
-        (c[3] * 255.) as u8,
-    ])
-}
+
 pub fn cross(q1: Quat, q2: Quat) -> Quat {
     let q1 = Vec4::from(q1);
     let q2 = Vec4::from(q2);

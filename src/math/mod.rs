@@ -1,4 +1,4 @@
-use glam::{Quat, Vec4, Vec4Swizzles};
+use glam::{Quat, Vec4, Vec4Swizzles, Vec3};
 
 pub mod ray;
 /// Returns a random float between 0 and 1
@@ -22,4 +22,11 @@ pub fn cross(q1: Quat, q2: Quat) -> Quat {
     let y = q1.wyz().dot(q2.ywx()) - q1.x * q2.z;
     let z = q1.wzx().dot(q2.zwy()) - q1.y * q2.x;
     Quat::from_xyzw(x, y, z, w)
+}
+pub fn in_unit_sphere(seed: u32) -> Vec3{
+    let seed2 = pcg_hash(seed);
+    let x = rand(seed);
+    let y = rand(seed ^ seed2);
+    let z = rand(seed2);
+    Vec3::new(x * 2. - 1., y * 2. - 1., z * 2. - 1.).normalize()
 }

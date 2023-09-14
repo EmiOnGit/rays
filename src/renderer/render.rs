@@ -4,7 +4,7 @@ use crate::{
     scene::Scene,
 };
 use glam::Vec3;
-use image::{DynamicImage, Pixel, Rgb};
+use image::{DynamicImage, Rgb};
 #[cfg(feature = "rayon")]
 use rayon::prelude::ParallelIterator;
 
@@ -35,35 +35,28 @@ impl Renderer {
     pub fn per_pixel(&self, x: usize, y: usize, camera: &Camera, scene: &Scene) -> Rgb<f32> {
         let direction = camera.ray_directions[x + y * self.size().width as usize];
         let mut ray = Ray::new(camera.position, direction);
-        let bounces = 3;
-        let mut color_acc = Vec3::ZERO;
-        let mut mult = 1.;
+        let bounces = 10;
+        let mut light = Vec3::ZERO;
+        let mut contribution = Vec3::ONE;
         let mut bounced = bounces;
         for i in 0..bounces {
             let payload = self.trace_ray(ray.clone(), scene);
             let Some(payload) = payload else {
-                color_acc += Vec3::new(0.8, 0.8, 1.);
+                let sky_color = Vec3::new(0.00, 0.00, 0.005);
+                light += sky_color * contribution;
                 bounced = i + 1;
                 break;
             };
             let sphere = &scene.spheres[payload.index];
-
-            let mat = scene.material(sphere);
+            let material = scene.material(sphere);
             ray.origin = payload.world_position - payload.world_normal * 0.0001;
-            let r1 = math::rand(payload.hit_distance.to_bits() ^ self.seed) - 0.5;
-            let r2 = math::rand((r1 * f32::MAX).to_bits()) - 0.5;
-            let r3 = math::rand((r2 * f32::MAX).to_bits()) - 0.5;
-            let n = payload.world_normal + mat.roughness * Vec3::new(r1, r2, r3);
-
-            ray.direction = ray.direction - 2. * (ray.direction.dot(n) * n);
-            let light_dir = Vec3::new(1., 1., 1.).normalize();
-            let light_intensity = payload.world_normal.normalize().dot(-light_dir).max(0.);
-            let mut color = scene.material(sphere).albedo;
-            color.apply(|c| c * light_intensity * mult);
-            color_acc += Vec3::from(color.0);
-            mult *= 0.7;
+            ray.direction = (math::in_unit_sphere(self.seed ^ payload.hit_distance.to_bits()) + payload.world_normal) / 2.;
+            // albedo.apply(|c| c  * contribution);
+            // light += Vec3::from(albedo.0);
+            contribution *= Vec3::from(material.albedo.0);
+            light += material.get_emission();
         }
-        let raw_c = (color_acc / bounced as f32).to_array();
+        let raw_c = (light / bounced as f32).to_array();
         let color = Rgb(raw_c);
         color
     }

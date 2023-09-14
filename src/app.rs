@@ -114,9 +114,10 @@ impl App {
             scene,
         }
     }
-
+    pub fn clear_renderer(&mut self) {
+        self.renderer.reset_acc();
+    }
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
-        println!("resizing with new size: {:?}", new_size);
         self.renderer.resize(new_size);
         self.camera.resize(new_size);
         // resize surface
@@ -201,6 +202,9 @@ impl App {
         false
     }
     pub fn handle_keyboard_input(&mut self, input: &KeyboardInput) {
-        self.camera.on_keyboard_event(input, self.timer.dt());
+        let moved = self.camera.on_keyboard_event(input, self.timer.dt());
+        if moved {
+            self.clear_renderer();
+        }
     }
 }

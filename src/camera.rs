@@ -71,7 +71,7 @@ impl Camera {
 
         self.calculate_ray_directions();
     }
-    pub fn on_keyboard_event(&mut self, input: &KeyboardInput, dt: f32) {
+    pub fn on_keyboard_event(&mut self, input: &KeyboardInput, dt: f32) -> bool{
         let speed = 20. * dt;
         let up = Vec3::Y;
         let right_direction = self.forward.cross(up);
@@ -82,10 +82,11 @@ impl Camera {
             Some(VirtualKeyCode::D) => self.position += right_direction * speed,
             Some(VirtualKeyCode::Q) => self.position -= up * speed,
             Some(VirtualKeyCode::E) => self.position += up * speed,
-            _ => return,
+            _ => return false,
         }
         self.recalculate_view();
         self.calculate_ray_directions();
+        true
     }
     pub fn on_rotate(&mut self, mouse_position: &PhysicalPosition<f64>) {
         let right_direction = self.forward.cross(Vec3::Y);

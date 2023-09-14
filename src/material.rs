@@ -1,14 +1,14 @@
-use image::Rgba;
+use image::Rgb;
 
 pub struct Material {
-    pub albedo: Rgba<f32>,
+    pub albedo: Rgb<f32>,
     pub roughness: f32,
     pub metallic: f32,
 }
 impl Default for Material {
     fn default() -> Self {
         Self {
-            albedo: Rgba([1., 0., 1., 1.]),
+            albedo: Rgb([1., 0., 1.]),
             roughness: Default::default(),
             metallic: Default::default(),
         }
@@ -17,9 +17,9 @@ impl Default for Material {
 
 impl Material {
     pub fn new(albedo: [f32; 3], roughness: f32, metallic: f32) -> Material {
-        let albedo = [albedo[0], albedo[1], albedo[2], 1.];
+        let albedo = [albedo[0], albedo[1], albedo[2]];
         Material {
-            albedo: Rgba(albedo),
+            albedo: Rgb(albedo),
             roughness,
             metallic,
         }

@@ -59,6 +59,7 @@ pub async fn run() {
                 WindowEvent::CursorMoved { position, .. } => {
                     if mouse_pressed {
                         app.camera.on_rotate(position);
+                        app.clear_renderer();
                     } else {
                         app.camera.last_mouse_position = None;
                     }

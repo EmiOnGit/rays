@@ -7,7 +7,7 @@ pub fn rand(mut seed: u32) -> f32 {
     seed as f32 / u32::MAX as f32
 }
 
-fn pcg_hash(seed: u32) -> u32 {
+pub fn pcg_hash(seed: u32) -> u32 {
     let state = seed * 747779605 + 2891336453;
     let word = ((state >> ((state >> 28) + 4)) ^ state) * 277803737;
 

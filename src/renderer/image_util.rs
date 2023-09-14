@@ -1,4 +1,3 @@
-use image::Rgba;
 use itertools::Itertools;
 use rayon::{prelude::IntoParallelIterator, vec::IntoIter};
 use wgpu::Extent3d;
@@ -20,14 +19,6 @@ impl From<ImageSize> for Extent3d {
             depth_or_array_layers: 1,
         }
     }
-}
-pub fn color_f32_to_u8(c: Rgba<f32>) -> Rgba<u8> {
-    Rgba([
-        (c[0] * 255.) as u8,
-        (c[1] * 255.) as u8,
-        (c[2] * 255.) as u8,
-        (c[3] * 255.) as u8,
-    ])
 }
 
 impl ImageSize {

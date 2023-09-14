@@ -1,6 +1,6 @@
-use glam::{Quat, Vec3, Vec4};
-use image::{Pixel, Rgba};
-use rayon::prelude::{IndexedParallelIterator, ParallelIterator};
+use glam::{Quat, Vec3};
+use image::{Pixel, Rgb, DynamicImage};
+use rayon::prelude::{IndexedParallelIterator, ParallelIterator, IntoParallelRefMutIterator};
 
 use crate::{
     camera::Camera,
@@ -8,40 +8,66 @@ use crate::{
     scene::Scene,
 };
 
-use super::{image_util, Renderer};
+use super::Renderer;
 
 impl Renderer {
-    pub fn per_pixel(&self, x: usize, y: usize, camera: &Camera, scene: &Scene) -> Rgba<f32> {
+    pub fn render(&mut self, camera: &Camera, scene: &Scene, dt: f32) {
+        self.acc_frame = self.acc_frame + 1;
+        let mut colors = Vec::with_capacity(camera.ray_directions.len());
+        self.size()
+            .into_par_iter()
+            .map(|(y, x)| {
+                self.per_pixel(x, y, camera, scene)
+            })
+            .collect_into_vec(&mut colors);
+        for (i, pixel) in self.acc_buffer.pixels_mut().enumerate() {
+            let c = colors[i];
+            *pixel = [pixel.0[0] + c[0], pixel.0[1] + c[1], pixel.0[2] + c[2]].into();
+        }
+        let mut i = self.acc_buffer.clone();
+        i.par_iter_mut().for_each(|pixel| {
+            assert_ne!(self.acc_frame, 0);
+            *pixel = *pixel / self.acc_frame as f32;
+        });
+        self.image_buffer = DynamicImage::from(i).into_rgba8();
+        self.seed = math::pcg_hash(self.seed.wrapping_add(dt.to_bits()));
+    }
+    pub fn per_pixel(&self, x: usize, y: usize, camera: &Camera, scene: &Scene) -> Rgb<f32> {
         let direction = camera.ray_directions[x + y * self.size().width as usize];
         let mut ray = Ray::new(camera.position, direction);
-        let bounces = 5;
-        let mut color_acc = Vec4::ZERO;
+        let bounces = 3;
+        let mut color_acc = Vec3::ZERO;
+        let mut mult = 1.;
         let mut bounced = bounces;
         for i in 0..bounces {
             let payload = self.trace_ray(ray.clone(), scene);
             let Some(payload) = payload else {
-                bounced = i;
+                color_acc += Vec3::new(0.8,0.8,1.);
+                bounced = i + 1;
                 break;
             };
             let sphere = &scene.spheres[payload.index];
 
             let mat = scene.material(sphere);
             ray.origin = payload.world_position - payload.world_normal * 0.0001;
+            let r1 = math::rand(payload.hit_distance.to_bits() + self.seed) - 0.5;
+            let r2 = math::rand((r1 * f32::MAX).to_bits() ) - 0.5;
+            let r3 = math::rand((r2 * f32::MAX).to_bits()) - 0.5;
             let r = Quat::from_rotation_arc(
                 ray.direction.normalize(),
                 payload.world_normal.normalize()
-                    + mat.roughness * math::rand(payload.hit_distance.to_bits() + self.seed),
+                    + mat.roughness * Vec3::new(r1,r2,r3),
             );
             ray.direction = r * ray.direction.normalize();
             let light_dir = Vec3::new(1., 1., 1.).normalize();
-            let light_intensity = payload.world_normal.dot(-light_dir).max(0.);
+            let light_intensity = payload.world_normal.normalize().dot(-light_dir).max(0.);
             let mut color = scene.material(sphere).albedo;
-            color.apply_without_alpha(|c| c * light_intensity);
-            color_acc += Vec4::from(color.0);
+            color.apply(|c| c * light_intensity * mult);
+            color_acc += Vec3::from(color.0);
+            mult *= 0.7;
         }
-        let mut raw_c = (color_acc / bounced as f32).to_array();
-        raw_c[3] = 1.;
-        let color = Rgba(raw_c);
+        let raw_c = (color_acc / bounced as f32).to_array();
+        let color = Rgb(raw_c);
         color
     }
     pub fn trace_ray(&self, ray: Ray, scene: &Scene) -> Option<HitPayload> {
@@ -93,20 +119,7 @@ impl Renderer {
     pub fn miss(&self) -> Option<HitPayload> {
         None
     }
-    pub fn render(&mut self, camera: &Camera, scene: &Scene, dt: f32) {
-        let mut colors = Vec::with_capacity(camera.ray_directions.len());
-        self.size()
-            .into_par_iter()
-            .map(|(y, x)| {
-                let color = self.per_pixel(x, y, camera, scene);
-                image_util::color_f32_to_u8(color)
-            })
-            .collect_into_vec(&mut colors);
-        for (i, pixel) in self.image_buffer.pixels_mut().enumerate() {
-            *pixel = colors[i];
-        }
-        self.seed = self.seed.wrapping_add(dt.to_bits());
-    }
+    
 }
 pub struct HitPayload {
     world_normal: Vec3,

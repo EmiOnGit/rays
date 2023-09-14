@@ -1,12 +1,24 @@
-use wgpu::SurfaceConfiguration;
+use wgpu::{
+    BindGroup, Device, SurfaceConfiguration, SurfaceTexture, Texture, TextureView,
+    TextureViewDescriptor,
+};
 
 pub struct RenderPipeline {
     pub pipeline: wgpu::RenderPipeline,
     pub bind_group_layout: wgpu::BindGroupLayout,
+    pub bind_group: Option<BindGroup>,
+    pub surface_texture: Option<SurfaceTexture>,
+    pub input_texture_view: TextureView,
+    pub input_texture: Texture,
 }
 
 impl RenderPipeline {
-    pub fn new(device: &wgpu::Device, config: &SurfaceConfiguration) -> RenderPipeline {
+    pub fn new(
+        device: &wgpu::Device,
+        config: &SurfaceConfiguration,
+        texture_view: TextureView,
+        texture: Texture,
+    ) -> RenderPipeline {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(
@@ -77,6 +89,36 @@ impl RenderPipeline {
         RenderPipeline {
             pipeline,
             bind_group_layout,
+            input_texture_view: texture_view,
+            input_texture: texture,
+            surface_texture: None,
+            bind_group: None,
+        }
+    }
+    pub fn set_input_texture(&mut self, texture: Texture) {
+        self.input_texture_view = texture.create_view(&TextureViewDescriptor::default());
+        self.input_texture = texture;
+    }
+    pub fn set_surface_texture(&mut self, surface_texture: SurfaceTexture) {
+        self.surface_texture = Some(surface_texture);
+    }
+    pub fn surface_texture_view(&self) -> TextureView {
+        self.surface_texture
+            .as_ref()
+            .unwrap()
+            .texture
+            .create_view(&TextureViewDescriptor::default())
+    }
+    pub fn prepare_bind_group(&mut self, device: &Device) {
+        if self.bind_group.is_none() {
+            self.bind_group = Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("Render bind group"),
+                layout: &self.bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.input_texture_view),
+                }],
+            }));
         }
     }
 }

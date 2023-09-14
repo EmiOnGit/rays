@@ -9,6 +9,10 @@ pub struct Sphere {
 
 impl Sphere {
     pub fn new(center: Vec3, radius: f32) -> Sphere {
-        Sphere { center, radius, albedo: Rgba([1.,0.,1.,1.]) }
+        Sphere {
+            center,
+            radius,
+            albedo: Rgba([1., 0., 1., 1.]),
+        }
     }
 }

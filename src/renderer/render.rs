@@ -1,6 +1,6 @@
 use glam::{Quat, Vec3};
-use image::{Pixel, Rgb, DynamicImage};
-use rayon::prelude::{IndexedParallelIterator, ParallelIterator, IntoParallelRefMutIterator};
+use image::{DynamicImage, Pixel, Rgb};
+use rayon::prelude::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 
 use crate::{
     camera::Camera,
@@ -16,9 +16,7 @@ impl Renderer {
         let mut colors = Vec::with_capacity(camera.ray_directions.len());
         self.size()
             .into_par_iter()
-            .map(|(y, x)| {
-                self.per_pixel(x, y, camera, scene)
-            })
+            .map(|(y, x)| self.per_pixel(x, y, camera, scene))
             .collect_into_vec(&mut colors);
         for (i, pixel) in self.acc_buffer.pixels_mut().enumerate() {
             let c = colors[i];
@@ -42,7 +40,7 @@ impl Renderer {
         for i in 0..bounces {
             let payload = self.trace_ray(ray.clone(), scene);
             let Some(payload) = payload else {
-                color_acc += Vec3::new(0.8,0.8,1.);
+                color_acc += Vec3::new(0.8, 0.8, 1.);
                 bounced = i + 1;
                 break;
             };
@@ -51,12 +49,11 @@ impl Renderer {
             let mat = scene.material(sphere);
             ray.origin = payload.world_position - payload.world_normal * 0.0001;
             let r1 = math::rand(payload.hit_distance.to_bits() + self.seed) - 0.5;
-            let r2 = math::rand((r1 * f32::MAX).to_bits() ) - 0.5;
+            let r2 = math::rand((r1 * f32::MAX).to_bits()) - 0.5;
             let r3 = math::rand((r2 * f32::MAX).to_bits()) - 0.5;
             let r = Quat::from_rotation_arc(
                 ray.direction.normalize(),
-                payload.world_normal.normalize()
-                    + mat.roughness * Vec3::new(r1,r2,r3),
+                payload.world_normal.normalize() + mat.roughness * Vec3::new(r1, r2, r3),
             );
             ray.direction = r * ray.direction.normalize();
             let light_dir = Vec3::new(1., 1., 1.).normalize();
@@ -119,7 +116,6 @@ impl Renderer {
     pub fn miss(&self) -> Option<HitPayload> {
         None
     }
-    
 }
 pub struct HitPayload {
     world_normal: Vec3,

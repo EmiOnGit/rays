@@ -2,7 +2,7 @@ pub mod image_util;
 mod render;
 pub mod render_pipeline;
 
-use image::{Rgba, RgbaImage, Rgb32FImage, Rgb};
+use image::{Rgb, Rgb32FImage, Rgba, RgbaImage};
 use log::warn;
 use wgpu::{Device, Texture};
 use winit::dpi::PhysicalSize;

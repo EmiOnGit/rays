@@ -9,7 +9,6 @@ pub struct Timer {
     log_frequency: usize,
 }
 impl Timer {
-
     pub fn new() -> Timer {
         Timer {
             app_start: Instant::now(),

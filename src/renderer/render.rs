@@ -55,8 +55,7 @@ impl Renderer {
             ray.direction = (math::in_unit_sphere(self.seed ^ payload.hit_distance.to_bits().wrapping_mul(payload.index as u32 * 11 + 10))
                 + payload.world_normal)
                 / 2.;
-            // albedo.apply(|c| c  * contribution);
-            // light += Vec3::from(albedo.0);
+
             contribution *= Vec3::from(material.albedo.0);
             light += material.get_emission();
         }

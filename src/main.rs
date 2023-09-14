@@ -6,6 +6,7 @@ mod renderer;
 mod scene;
 pub mod sphere;
 mod timer;
+mod globals;
 
 use app::App;
 use winit::{

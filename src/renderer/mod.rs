@@ -1,6 +1,7 @@
 pub mod image_util;
 mod render;
 pub mod render_pipeline;
+pub mod compute_pipeline;
 
 use image::{Rgba, Rgba32FImage};
 use log::warn;
@@ -63,7 +64,7 @@ impl Renderer {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba32Float,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::STORAGE_BINDING,
             view_formats: &[],
         })
     }

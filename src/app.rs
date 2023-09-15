@@ -1,10 +1,10 @@
 use std::iter::{self};
 
+use egui::Context;
+use egui_wgpu::renderer::ScreenDescriptor;
 use glam::{Mat4, Vec2};
 use log::info;
-use wgpu::{
-    util::DeviceExt, BufferAddress, Features, Label, Limits, PresentMode, SurfaceConfiguration,
-};
+use wgpu::{util::DeviceExt, BufferAddress, Features, Label, Limits, PresentMode};
 use winit::{
     dpi::PhysicalSize,
     event::{KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -23,7 +23,7 @@ use crate::{
 
 pub struct App {
     surface: wgpu::Surface,
-    surface_config: SurfaceConfiguration,
+    surface_config: wgpu::SurfaceConfiguration,
 
     queue: wgpu::Queue,
     pub device: wgpu::Device,
@@ -40,6 +40,9 @@ pub struct App {
     render_pipeline: RenderPipeline,
     compute_pipeline: ComputePipeline,
     timer: Timer,
+    // --egui
+    egui_renderer: egui_wgpu::Renderer,
+    egui_primitives: Vec<egui::ClippedPrimitive>,
 }
 impl App {
     pub async fn new(window: Window) -> Self {
@@ -81,6 +84,7 @@ impl App {
             )
             .await
             .unwrap();
+
         let surface_capabilities = surface.get_capabilities(&adapter);
         // Shader code in this tutorial assumes an sRGB surface texture. Using a different
         // one will result all the colors coming out darker. If you want to support non
@@ -117,6 +121,8 @@ impl App {
             inverse_view: Mat4::IDENTITY,
         };
         let timer = Timer::new();
+        // --egui
+        let egui_renderer = egui_wgpu::Renderer::new(&device, surface_format, None, 1);
         Self {
             window,
             surface,
@@ -129,6 +135,9 @@ impl App {
             queue,
             camera,
             renderer,
+            egui_renderer,
+            egui_primitives: Vec::new(),
+
             scene,
         }
     }
@@ -145,7 +154,18 @@ impl App {
         let input_texture = self.renderer.create_input_texture(&self.device);
         self.render_pipeline.set_input_texture(input_texture);
     }
-
+    pub fn render_egui(&mut self, context: &mut Context) {
+        let egui_raw_input = egui::RawInput::default();
+        let egui_full_output = context.run(egui_raw_input, |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                ui.label("test label");
+            });
+        });
+        for (id,image_delta) in egui_full_output.textures_delta.set {
+            self.egui_renderer.update_texture(&self.device, &self.queue, id, &image_delta);
+        }
+        self.egui_primitives = context.tessellate(egui_full_output.shapes);
+    }
     pub fn prepare(&mut self) -> Result<(), wgpu::SurfaceError> {
         let input_texture = self.renderer.create_input_texture(&self.device);
         self.render_pipeline.set_input_texture(input_texture);
@@ -164,7 +184,23 @@ impl App {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
+
         // write data to gpu
+        {
+            let screen_descriptor = ScreenDescriptor {
+                size_in_pixels: [self.surface_config.width, self.surface_config.height],
+                pixels_per_point: 1.,
+            };
+            let _commands = self.egui_renderer.update_buffers(
+                &self.device,
+                &self.queue,
+                &mut encoder,
+                &self.egui_primitives,
+                &screen_descriptor,
+            );
+
+        }
+
         {
             let globals_size = std::mem::size_of::<Globals>();
             let globals_buffer =
@@ -268,22 +304,46 @@ impl App {
         let render_bind_group = self.render_pipeline.bind_group.as_ref().unwrap();
         {
             let view = self.render_pipeline.surface_texture_view();
+            // let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            //     label: Some("Render Pass"),
+            //     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            //         view: &view,
+            //         resolve_target: None,
+            //         ops: wgpu::Operations {
+            //             load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+            //             store: true,
+            //         },
+            //     })],
+            //     depth_stencil_attachment: None,
+            // });
+
+            // render_pass.set_pipeline(&self.render_pipeline.pipeline);
+            // render_pass.set_bind_group(0, render_bind_group, &[]);
+            // render_pass.draw(0..6, 0..1);
+        }
+        // write to egui
+        {
+            let view = self.render_pipeline.surface_texture_view();
+
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
+                label: Some("gui Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
                         store: true,
                     },
                 })],
                 depth_stencil_attachment: None,
             });
+            let screen_descriptor = ScreenDescriptor {
+                size_in_pixels: [self.surface_config.width, self.surface_config.height],
+                pixels_per_point: 1.,
+            };
 
-            render_pass.set_pipeline(&self.render_pipeline.pipeline);
-            render_pass.set_bind_group(0, render_bind_group, &[]);
-            render_pass.draw(0..6, 0..1);
+            self.egui_renderer
+                .render(&mut render_pass, &self.egui_primitives, &screen_descriptor);
         }
         // submit will accept anything that implements IntoIter
         self.queue.submit(iter::once(encoder.finish()));

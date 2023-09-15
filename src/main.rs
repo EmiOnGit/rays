@@ -9,6 +9,8 @@ pub mod sphere;
 mod timer;
 
 use app::App;
+use egui::Context;
+use simple_logger::SimpleLogger;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -19,10 +21,16 @@ fn main() {
     pollster::block_on(run());
 }
 pub async fn run() {
-    env_logger::init();
+    SimpleLogger::default()
+        .with_level(log::LevelFilter::Info)
+        .with_module_level("wgpu_core", log::LevelFilter::Warn)
+        .with_module_level("wgpu_hal", log::LevelFilter::Warn)
+        .init()
+        .unwrap();
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
     let mut app = App::new(window).await;
+    let mut context = Context::default();
     let mut mouse_pressed = false;
     event_loop.run(move |event, _, control_flow| match event {
         Event::RedrawRequested(window_id) if window_id == app.window().id() => {
@@ -34,6 +42,7 @@ pub async fn run() {
                 Err(e) => eprintln!("{:?}", e),
             }
             app.queue();
+            app.render_egui(&mut context);
         }
         Event::MainEventsCleared => {
             app.update();

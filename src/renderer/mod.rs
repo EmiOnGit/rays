@@ -1,6 +1,8 @@
+#![allow(dead_code)]
 pub mod compute_pipeline;
 pub mod image_util;
 mod render;
+
 pub mod render_pipeline;
 
 use image::{Rgba, Rgba32FImage};
@@ -9,7 +11,6 @@ use wgpu::{Device, Texture};
 use winit::dpi::PhysicalSize;
 
 use self::image_util::ImageSize;
-
 pub struct Renderer {
     /// This buffer can be used to draw on
     pub image_buffer: Rgba32FImage,

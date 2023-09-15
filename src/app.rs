@@ -7,6 +7,7 @@ use wgpu::{util::DeviceExt, BufferAddress, Features, Label, Limits, PresentMode}
 use winit::{
     dpi::PhysicalSize,
     event::{KeyboardInput, VirtualKeyCode, WindowEvent},
+    event_loop::EventLoop,
     window::Window,
 };
 
@@ -17,7 +18,8 @@ use crate::{
     renderer::{compute_pipeline::ComputePipeline, render_pipeline::RenderPipeline, Renderer},
     scene::Scene,
     sphere::Sphere,
-    timer::Timer, ui::UiManager,
+    timer::Timer,
+    ui::UiManager,
 };
 
 pub struct App {
@@ -42,7 +44,7 @@ pub struct App {
     ui_manager: UiManager,
 }
 impl App {
-    pub async fn new(window: Window) -> Self {
+    pub async fn new(window: Window, event_loop: &EventLoop<()>) -> Self {
         let size = window.inner_size();
 
         // The instance is a handle to our GPU
@@ -122,7 +124,7 @@ impl App {
             size_in_pixels: [surface_config.width, surface_config.height],
             pixels_per_point: 1.,
         };
-        let ui_manager = UiManager::new(&device, surface_format, screen_descriptor);
+        let ui_manager = UiManager::new(&device, surface_format, screen_descriptor, event_loop);
         Self {
             window,
             surface,
@@ -152,10 +154,17 @@ impl App {
         self.surface.configure(&self.device, &self.surface_config);
         let input_texture = self.renderer.create_input_texture(&self.device);
         self.render_pipeline.set_input_texture(input_texture);
+        let screen_descriptor = ScreenDescriptor {
+            size_in_pixels: [self.surface_config.width, self.surface_config.height],
+            pixels_per_point: 1.,
+        };
+        self.ui_manager.resize(screen_descriptor);
+    }
+    pub fn handle_window_event(&mut self, window_event: &WindowEvent) {
+        self.ui_manager.handle_window_event(window_event);
     }
     pub fn render_ui(&mut self) {
-        self.ui_manager.run(&self.device, &self.queue);
-
+        self.ui_manager.run(&self.device, &self.queue, &self.window);
     }
     pub fn prepare(&mut self) -> Result<(), wgpu::SurfaceError> {
         let input_texture = self.renderer.create_input_texture(&self.device);
@@ -177,7 +186,8 @@ impl App {
 
         // write data to gpu
 
-        self.ui_manager.update_buffers(&mut encoder, &self.device, &self.queue);
+        self.ui_manager
+            .update_buffers(&mut encoder, &self.device, &self.queue);
 
         {
             let globals_size = std::mem::size_of::<Globals>();
@@ -279,7 +289,7 @@ impl App {
                 1,
             );
         }
-         
+
         let render_bind_group = self.render_pipeline.bind_group.as_ref().unwrap();
         {
             let view = self.render_pipeline.surface_texture_view();
@@ -300,26 +310,25 @@ impl App {
             render_pass.set_bind_group(0, render_bind_group, &[]);
             render_pass.draw(0..6, 0..1);
         }
-       // write to egui
-       {
-        let view = self.render_pipeline.surface_texture_view();
+        // write to egui
+        {
+            let view = self.render_pipeline.surface_texture_view();
 
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Gui Pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: true,
-                },
-            })],
-            depth_stencil_attachment: None,
-        });
-        
-        self.ui_manager.render(&mut render_pass);
-    
-    }
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Gui Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: true,
+                    },
+                })],
+                depth_stencil_attachment: None,
+            });
+
+            self.ui_manager.render(&mut render_pass);
+        }
         // submit will accept anything that implements IntoIter
         self.queue.submit(iter::once(encoder.finish()));
         self.render_pipeline

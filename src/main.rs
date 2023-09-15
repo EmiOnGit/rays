@@ -27,9 +27,10 @@ pub async fn run() {
         .with_module_level("wgpu_hal", log::LevelFilter::Warn)
         .init()
         .unwrap();
+
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
-    let mut app = App::new(window).await;
+    let mut app = App::new(window, &event_loop).await;
     let mut mouse_pressed = false;
     event_loop.run(move |event, _, control_flow| match event {
         Event::RedrawRequested(window_id) if window_id == app.window().id() => {
@@ -56,6 +57,7 @@ pub async fn run() {
             if app.input(event) {
                 return;
             }
+            app.handle_window_event(event);
             match event {
                 WindowEvent::MouseInput { button, state, .. } => {
                     if &MouseButton::Right == button {

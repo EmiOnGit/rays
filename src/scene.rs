@@ -1,10 +1,10 @@
 use glam::Vec3;
 
-use crate::{material::Material, sphere::Sphere};
-#[derive(Default)]
+use crate::{material::Material, sphere::Sphere, camera::Camera};
 pub struct Scene {
     pub spheres: Vec<Sphere>,
     pub materials: Vec<Material>,
+    pub camera: Camera,
 }
 
 impl Scene {
@@ -24,6 +24,8 @@ impl Scene {
         //     spheres.push(Sphere::new(center, radius, i as usize % 5 + 1))
         // }
         let materials = vec![Material::new([0.0, 1.0, 1.0])];
-        Scene { spheres, materials }
+        let camera = Camera::new(45., 0.1, 100., 1., 1.);
+
+        Scene { spheres, materials, camera }
     }
 }

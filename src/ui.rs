@@ -87,6 +87,14 @@ impl UiManager {
                     });
                 }
             });
+            egui::Window::new("Camera").show(ctx, |ui| {
+                ui.label(format!("Transform"));
+                ui.horizontal(|ui| {
+                    ui.add(DragValue::new(&mut scene.camera.position.x).speed(0.01));
+                    ui.add(DragValue::new(&mut scene.camera.position.y).speed(0.01));
+                    ui.add(DragValue::new(&mut scene.camera.position.z).speed(0.01));
+                });
+            });
         });
         for (id, image_delta) in egui_full_output.textures_delta.set {
             self.egui_renderer

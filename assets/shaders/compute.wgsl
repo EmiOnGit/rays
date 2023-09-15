@@ -17,6 +17,7 @@ struct Globals {
     viewport_height: f32,
     inverse_projection: mat4x4f,
     inverse_view: mat4x4f,
+    camera_position: vec3f,
 }
 struct Sphere {
     center: vec3<f32>,
@@ -53,7 +54,7 @@ fn main(
     // trace ray
 
     let sphere = spheres[0];
-    let origin = -sphere.center; // camera at origin for now
+    let origin = globals.camera_position - sphere.center; // camera at origin for now
     let radius = sphere.radius;
     let a = dot(ray_direction, ray_direction);
     let b = 2. * dot(origin, ray_direction);

@@ -1,7 +1,7 @@
 use std::iter::{self};
 
 use egui_wgpu::renderer::ScreenDescriptor;
-use glam::{Mat4, Vec2};
+use glam::{Mat4, Vec2, Vec3};
 use log::info;
 use wgpu::{util::DeviceExt, BufferAddress, Features, Label, Limits, PresentMode};
 use winit::{
@@ -12,7 +12,6 @@ use winit::{
 };
 
 use crate::{
-    camera::Camera,
     globals::Globals,
     material::Material,
     renderer::{compute_pipeline::ComputePipeline, render_pipeline::RenderPipeline, Renderer},
@@ -34,8 +33,7 @@ pub struct App {
     window: winit::window::Window,
 
     renderer: Renderer,
-    pub camera: Camera,
-    scene: Scene,
+    pub scene: Scene,
     globals: Globals,
 
     render_pipeline: RenderPipeline,
@@ -104,7 +102,6 @@ impl App {
             view_formats: vec![],
         };
         surface.configure(&device, &surface_config);
-        let camera = Camera::new(45., 0.1, 100., size.width as f32, size.height as f32);
         let scene = Scene::example_scene();
         let renderer = Renderer::new(size);
 
@@ -118,6 +115,8 @@ impl App {
             viewport: Vec2::ONE * 1000.,
             inverse_projection: Mat4::IDENTITY,
             inverse_view: Mat4::IDENTITY,
+            camera_position: Vec3::ZERO,
+            _offset: 0.
         };
         let timer = Timer::new();
         let screen_descriptor = ScreenDescriptor {
@@ -135,7 +134,6 @@ impl App {
             timer,
             globals,
             queue,
-            camera,
             renderer,
             ui_manager,
 
@@ -147,7 +145,7 @@ impl App {
     }
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
         self.renderer.resize(new_size);
-        self.camera.resize(new_size);
+        self.scene.camera.resize(new_size);
         // resize surface
         self.surface_config.height = new_size.height;
         self.surface_config.width = new_size.width;
@@ -341,9 +339,10 @@ impl App {
 
     pub fn update(&mut self) {
         self.timer.update();
-        self.globals.inverse_projection = self.camera.inverse_projection;
-        self.globals.inverse_view = self.camera.inverse_view;
-        self.globals.viewport = Vec2::new(self.camera.viewport_width, self.camera.viewport_height);
+        self.globals.inverse_projection = self.scene.camera.inverse_projection;
+        self.globals.inverse_view = self.scene.camera.inverse_view;
+        self.globals.viewport = Vec2::new(self.scene.camera.viewport_width, self.scene.camera.viewport_height);
+        self.globals.camera_position = self.scene.camera.position;
         // self.renderer.render(&self.camera, &self.scene);
         // self.renderer.update_image_buffer();
     }
@@ -366,7 +365,7 @@ impl App {
                 self.scene.spheres[0].radius += 0.1;
             }
         }
-        let moved = self.camera.on_keyboard_event(input, self.timer.dt());
+        let moved = self.scene.camera.on_keyboard_event(input, self.timer.dt());
         if moved {
             self.clear_renderer();
         }

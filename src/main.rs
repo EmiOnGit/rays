@@ -69,10 +69,10 @@ pub async fn run() {
                 }
                 WindowEvent::CursorMoved { position, .. } => {
                     if mouse_pressed {
-                        app.camera.on_rotate(position);
+                        app.scene.camera.on_rotate(position);
                         app.clear_renderer();
                     } else {
-                        app.camera.last_mouse_position = None;
+                        app.scene.camera.last_mouse_position = None;
                     }
                 }
                 WindowEvent::Resized(physical_size) => {

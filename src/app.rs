@@ -164,7 +164,8 @@ impl App {
         self.ui_manager.handle_window_event(window_event);
     }
     pub fn render_ui(&mut self) {
-        self.ui_manager.run(&self.device, &self.queue, &self.window);
+        self.ui_manager
+            .run(&self.device, &self.queue, &self.window, &mut self.scene);
     }
     pub fn prepare(&mut self) -> Result<(), wgpu::SurfaceError> {
         let input_texture = self.renderer.create_input_texture(&self.device);

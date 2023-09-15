@@ -1,24 +1,26 @@
-use egui::Context;
+use egui::{Color32, Context, DragValue, RichText};
 use egui_wgpu::renderer::ScreenDescriptor;
 use egui_winit::State;
 use log::warn;
 use wgpu::{CommandEncoder, Device, Queue, RenderPass, TextureFormat};
 use winit::{event::WindowEvent, event_loop::EventLoopWindowTarget};
 
+use crate::{material::Material, scene::Scene};
+
 pub struct UiManager {
-    // --egui
     egui_renderer: egui_wgpu::Renderer,
     egui_primitives: Vec<egui::ClippedPrimitive>,
     context: Context,
     screen_descriptor: ScreenDescriptor,
     state: State,
+    header_color: Color32,
 }
 impl UiManager {
-    pub fn new<T>(
+    pub fn new(
         device: &Device,
         surface_format: TextureFormat,
         screen_descriptor: ScreenDescriptor,
-        event_loop: &EventLoopWindowTarget<T>,
+        event_loop: &EventLoopWindowTarget<()>,
     ) -> Self {
         let egui_renderer = egui_wgpu::Renderer::new(&device, surface_format, None, 1);
         let context = Context::default();
@@ -30,6 +32,7 @@ impl UiManager {
             context,
             screen_descriptor,
             state,
+            header_color: Color32::from_rgb(255, 150, 150),
         }
     }
     pub fn handle_window_event(&mut self, window_event: &WindowEvent) -> bool {
@@ -39,17 +42,51 @@ impl UiManager {
     pub fn resize(&mut self, screen_descriptor: ScreenDescriptor) {
         self.screen_descriptor = screen_descriptor;
     }
-    pub fn run(&mut self, device: &Device, queue: &Queue, window: &winit::window::Window) {
+    pub fn run(
+        &mut self,
+        device: &Device,
+        queue: &Queue,
+        window: &winit::window::Window,
+        scene: &mut Scene,
+    ) {
         let egui_raw_input = self.state.take_egui_input(window);
         let egui_full_output = self.context.run(egui_raw_input, |ctx| {
-            egui::Window::new("area")
-                .default_height(500.)
-                .show(ctx, |ui| {
-                    ui.label("test label");
-                    if ui.button("click me").hovered() {
-                        warn!("hover on button");
-                    }
-                });
+            egui::Window::new("Scene").show(ctx, |ui| {
+                for (i, sphere) in scene.spheres.iter_mut().enumerate() {
+                    ui.heading(RichText::new("Spheres").color(self.header_color));
+
+                    ui.group(|ui| {
+                        ui.label(format!("Sphere {i}"));
+                        ui.horizontal(|ui| {
+                            ui.label("position");
+                            ui.add(DragValue::new(&mut sphere.center.x).speed(0.01));
+                            ui.add(DragValue::new(&mut sphere.center.y).speed(0.01));
+                            ui.add(DragValue::new(&mut sphere.center.z).speed(0.01));
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("radius");
+                            ui.add(DragValue::new(&mut sphere.radius).speed(0.001));
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("material");
+                            ui.add(DragValue::new(&mut sphere.material_index));
+                        });
+                    });
+                }
+                ui.add_space(10.);
+                ui.heading(RichText::new("Materials").color(self.header_color));
+
+                for (i, material) in scene.materials.iter_mut().enumerate() {
+                    ui.group(|ui| {
+                        ui.label(format!("Material {i}"));
+                        ui.horizontal(|ui| {
+                            ui.label("color");
+                            let color = &mut material.albedo.0;
+                            ui.color_edit_button_rgba_unmultiplied(color).changed();
+                        });
+                    });
+                }
+            });
         });
         for (id, image_delta) in egui_full_output.textures_delta.set {
             self.egui_renderer

@@ -157,7 +157,7 @@ impl App {
     pub fn render_egui(&mut self, context: &mut Context) {
         let egui_raw_input = egui::RawInput::default();
         let egui_full_output = context.run(egui_raw_input, |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
+            egui::Area::new("area").default_pos(&[100.,100.]).show(ctx, |ui| {
                 ui.label("test label");
             });
         });
@@ -301,50 +301,51 @@ impl App {
                 1,
             );
         }
+         
         let render_bind_group = self.render_pipeline.bind_group.as_ref().unwrap();
         {
             let view = self.render_pipeline.surface_texture_view();
-            // let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            //     label: Some("Render Pass"),
-            //     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-            //         view: &view,
-            //         resolve_target: None,
-            //         ops: wgpu::Operations {
-            //             load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-            //             store: true,
-            //         },
-            //     })],
-            //     depth_stencil_attachment: None,
-            // });
-
-            // render_pass.set_pipeline(&self.render_pipeline.pipeline);
-            // render_pass.set_bind_group(0, render_bind_group, &[]);
-            // render_pass.draw(0..6, 0..1);
-        }
-        // write to egui
-        {
-            let view = self.render_pipeline.surface_texture_view();
-
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("gui Pass"),
+                label: Some("Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                        load: wgpu::LoadOp::Load,
                         store: true,
                     },
                 })],
                 depth_stencil_attachment: None,
             });
-            let screen_descriptor = ScreenDescriptor {
-                size_in_pixels: [self.surface_config.width, self.surface_config.height],
-                pixels_per_point: 1.,
-            };
 
-            self.egui_renderer
-                .render(&mut render_pass, &self.egui_primitives, &screen_descriptor);
+            render_pass.set_pipeline(&self.render_pipeline.pipeline);
+            render_pass.set_bind_group(0, render_bind_group, &[]);
+            render_pass.draw(0..6, 0..1);
         }
+       // write to egui
+       {
+        let view = self.render_pipeline.surface_texture_view();
+
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Gui Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: true,
+                },
+            })],
+            depth_stencil_attachment: None,
+        });
+        let screen_descriptor = ScreenDescriptor {
+            size_in_pixels: [self.surface_config.width, self.surface_config.height],
+            pixels_per_point: 1.,
+        };
+
+        self.egui_renderer
+            .render(&mut render_pass, &self.egui_primitives, &screen_descriptor);
+    }
         // submit will accept anything that implements IntoIter
         self.queue.submit(iter::once(encoder.finish()));
         self.render_pipeline

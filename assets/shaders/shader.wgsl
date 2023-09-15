@@ -31,6 +31,8 @@ fn vs_main(
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    return vec4<f32>(textureLoad(tex, vec2<u32>(u32(in.clip_position.x), u32(in.clip_position.y)),0));
+    var color = textureLoad(tex, vec2<u32>(u32(in.clip_position.x), u32(in.clip_position.y)),0);
+    color[3] = 0.5;
+    return color;
 }
  

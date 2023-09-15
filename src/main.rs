@@ -7,9 +7,9 @@ mod renderer;
 mod scene;
 pub mod sphere;
 mod timer;
+mod ui;
 
 use app::App;
-use egui::Context;
 use simple_logger::SimpleLogger;
 use winit::{
     event::*,
@@ -30,7 +30,6 @@ pub async fn run() {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
     let mut app = App::new(window).await;
-    let mut context = Context::default();
     let mut mouse_pressed = false;
     event_loop.run(move |event, _, control_flow| match event {
         Event::RedrawRequested(window_id) if window_id == app.window().id() => {
@@ -42,7 +41,7 @@ pub async fn run() {
                 Err(e) => eprintln!("{:?}", e),
             }
             app.queue();
-            app.render_egui(&mut context);
+            app.render_ui();
         }
         Event::MainEventsCleared => {
             app.update();

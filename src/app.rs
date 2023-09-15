@@ -1,6 +1,5 @@
 use std::iter::{self};
 
-use egui::Context;
 use egui_wgpu::renderer::ScreenDescriptor;
 use glam::{Mat4, Vec2};
 use log::info;
@@ -18,7 +17,7 @@ use crate::{
     renderer::{compute_pipeline::ComputePipeline, render_pipeline::RenderPipeline, Renderer},
     scene::Scene,
     sphere::Sphere,
-    timer::Timer,
+    timer::Timer, ui::UiManager,
 };
 
 pub struct App {
@@ -40,9 +39,7 @@ pub struct App {
     render_pipeline: RenderPipeline,
     compute_pipeline: ComputePipeline,
     timer: Timer,
-    // --egui
-    egui_renderer: egui_wgpu::Renderer,
-    egui_primitives: Vec<egui::ClippedPrimitive>,
+    ui_manager: UiManager,
 }
 impl App {
     pub async fn new(window: Window) -> Self {
@@ -121,8 +118,11 @@ impl App {
             inverse_view: Mat4::IDENTITY,
         };
         let timer = Timer::new();
-        // --egui
-        let egui_renderer = egui_wgpu::Renderer::new(&device, surface_format, None, 1);
+        let screen_descriptor = ScreenDescriptor {
+            size_in_pixels: [surface_config.width, surface_config.height],
+            pixels_per_point: 1.,
+        };
+        let ui_manager = UiManager::new(&device, surface_format, screen_descriptor);
         Self {
             window,
             surface,
@@ -135,8 +135,7 @@ impl App {
             queue,
             camera,
             renderer,
-            egui_renderer,
-            egui_primitives: Vec::new(),
+            ui_manager,
 
             scene,
         }
@@ -154,17 +153,9 @@ impl App {
         let input_texture = self.renderer.create_input_texture(&self.device);
         self.render_pipeline.set_input_texture(input_texture);
     }
-    pub fn render_egui(&mut self, context: &mut Context) {
-        let egui_raw_input = egui::RawInput::default();
-        let egui_full_output = context.run(egui_raw_input, |ctx| {
-            egui::Area::new("area").default_pos(&[100.,100.]).show(ctx, |ui| {
-                ui.label("test label");
-            });
-        });
-        for (id,image_delta) in egui_full_output.textures_delta.set {
-            self.egui_renderer.update_texture(&self.device, &self.queue, id, &image_delta);
-        }
-        self.egui_primitives = context.tessellate(egui_full_output.shapes);
+    pub fn render_ui(&mut self) {
+        self.ui_manager.run(&self.device, &self.queue);
+
     }
     pub fn prepare(&mut self) -> Result<(), wgpu::SurfaceError> {
         let input_texture = self.renderer.create_input_texture(&self.device);
@@ -174,7 +165,6 @@ impl App {
         self.render_pipeline.surface_texture = Some(surface_texture);
 
         self.render_pipeline.prepare_bind_group(&self.device);
-        // self.compute_pipeline.prepare_bind_group(&self.device);
         Ok(())
     }
     pub fn queue(&mut self) {
@@ -186,20 +176,8 @@ impl App {
             });
 
         // write data to gpu
-        {
-            let screen_descriptor = ScreenDescriptor {
-                size_in_pixels: [self.surface_config.width, self.surface_config.height],
-                pixels_per_point: 1.,
-            };
-            let _commands = self.egui_renderer.update_buffers(
-                &self.device,
-                &self.queue,
-                &mut encoder,
-                &self.egui_primitives,
-                &screen_descriptor,
-            );
 
-        }
+        self.ui_manager.update_buffers(&mut encoder, &self.device, &self.queue);
 
         {
             let globals_size = std::mem::size_of::<Globals>();
@@ -338,13 +316,9 @@ impl App {
             })],
             depth_stencil_attachment: None,
         });
-        let screen_descriptor = ScreenDescriptor {
-            size_in_pixels: [self.surface_config.width, self.surface_config.height],
-            pixels_per_point: 1.,
-        };
-
-        self.egui_renderer
-            .render(&mut render_pass, &self.egui_primitives, &screen_descriptor);
+        
+        self.ui_manager.render(&mut render_pass);
+    
     }
         // submit will accept anything that implements IntoIter
         self.queue.submit(iter::once(encoder.finish()));

@@ -1,6 +1,6 @@
 use glam::Vec3;
 
-use crate::{material::Material, math::rand, sphere::Sphere};
+use crate::{material::Material, sphere::Sphere};
 #[derive(Default)]
 pub struct Scene {
     pub spheres: Vec<Sphere>,

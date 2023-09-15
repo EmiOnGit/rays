@@ -1,11 +1,11 @@
 use egui::{Color32, Context, DragValue, RichText};
 use egui_wgpu::renderer::ScreenDescriptor;
 use egui_winit::State;
-use log::warn;
+
 use wgpu::{CommandEncoder, Device, Queue, RenderPass, TextureFormat};
 use winit::{event::WindowEvent, event_loop::EventLoopWindowTarget};
 
-use crate::{material::Material, scene::Scene};
+use crate::scene::Scene;
 
 pub struct UiManager {
     egui_renderer: egui_wgpu::Renderer,
@@ -69,7 +69,7 @@ impl UiManager {
                         });
                         ui.horizontal(|ui| {
                             ui.label("material");
-                            ui.add(DragValue::new(&mut sphere.material_index));
+                            ui.add(DragValue::new(&mut sphere.material_index).clamp_range(0..=scene.materials.len() - 1));
                         });
                     });
                 }

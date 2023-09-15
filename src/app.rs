@@ -1,18 +1,24 @@
 use std::iter::{self};
 
+use glam::{Mat4, Vec2};
 use log::info;
-use wgpu::{Features, Label, Limits, PresentMode, SurfaceConfiguration, util::DeviceExt};
+use wgpu::{
+    util::DeviceExt, BufferAddress, Features, Label, Limits, PresentMode, SurfaceConfiguration,
+};
 use winit::{
     dpi::PhysicalSize,
-    event::{KeyboardInput, WindowEvent, VirtualKeyCode},
+    event::{KeyboardInput, VirtualKeyCode, WindowEvent},
     window::Window,
 };
 
 use crate::{
     camera::Camera,
-    renderer::{render_pipeline::RenderPipeline, Renderer, compute_pipeline::ComputePipeline},
+    globals::Globals,
+    material::Material,
+    renderer::{compute_pipeline::ComputePipeline, render_pipeline::RenderPipeline, Renderer},
     scene::Scene,
-    timer::Timer, globals::Globals,
+    sphere::Sphere,
+    timer::Timer,
 };
 
 pub struct App {
@@ -103,10 +109,12 @@ impl App {
         let input_texture_view = input_texture.create_view(&wgpu::TextureViewDescriptor::default());
         let render_pipeline =
             RenderPipeline::new(&device, &surface_config, input_texture_view, input_texture);
-        let compute_pipeline =
-            ComputePipeline::new(&device);
+        let compute_pipeline = ComputePipeline::new(&device);
         let globals = Globals {
             seed: 105,
+            viewport: Vec2::ONE * 1000.,
+            inverse_projection: Mat4::IDENTITY,
+            inverse_view: Mat4::IDENTITY,
         };
         let timer = Timer::new();
         Self {
@@ -159,20 +167,52 @@ impl App {
         // write data to gpu
         {
             let globals_size = std::mem::size_of::<Globals>();
-           
-            let globals_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor { 
-                label: "Globals buffer".into(),
-                contents: bytemuck::cast_slice(&[self.globals]), 
-                usage: wgpu::BufferUsages::COPY_SRC ,
+            let globals_buffer =
+                self.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: "Globals buffer".into(),
+                        contents: bytemuck::cast_slice(&[self.globals]),
+                        usage: wgpu::BufferUsages::COPY_SRC,
+                    });
 
-            });
             encoder.copy_buffer_to_buffer(
                 &globals_buffer,
                 0,
                 &self.compute_pipeline.globals_buffer,
                 0,
-                globals_size as u64,
-            );  
+                globals_size as BufferAddress,
+            );
+            let sphere = self.scene.spheres[0];
+            let sphere_buffer = self
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: "Sphere buffer".into(),
+                    contents: bytemuck::cast_slice(&[sphere]),
+                    usage: wgpu::BufferUsages::COPY_SRC,
+                });
+            let sphere_size = std::mem::size_of::<Sphere>();
+            encoder.copy_buffer_to_buffer(
+                &sphere_buffer,
+                0,
+                &self.compute_pipeline.sphere_buffer,
+                0,
+                sphere_size as BufferAddress,
+            );
+            let material_buffer =
+                self.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: "Material buffer".into(),
+                        contents: bytemuck::cast_slice(&[self.scene.materials[0]]),
+                        usage: wgpu::BufferUsages::COPY_SRC,
+                    });
+            let material_size = std::mem::size_of::<Material>();
+            encoder.copy_buffer_to_buffer(
+                &material_buffer,
+                0,
+                &self.compute_pipeline.material_buffer,
+                0,
+                material_size as BufferAddress,
+            );
         }
         let compute_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Compute bind group"),
@@ -180,37 +220,50 @@ impl App {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::Buffer(self.compute_pipeline.globals_buffer.as_entire_buffer_binding()),
+                    resource: wgpu::BindingResource::Buffer(
+                        self.compute_pipeline
+                            .globals_buffer
+                            .as_entire_buffer_binding(),
+                    ),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&self.render_pipeline.input_texture_view),
+                    resource: wgpu::BindingResource::TextureView(
+                        &self.render_pipeline.input_texture_view,
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Buffer(
+                        self.compute_pipeline
+                            .sphere_buffer
+                            .as_entire_buffer_binding(),
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Buffer(
+                        self.compute_pipeline
+                            .material_buffer
+                            .as_entire_buffer_binding(),
+                    ),
                 },
             ],
         });
-      
-        // self.queue.write_texture(
-        //     wgpu::ImageCopyTexture {
-        //         texture: &self.render_pipeline.input_texture,
-        //         mip_level: 0,
-        //         origin: wgpu::Origin3d::ZERO,
-        //         aspect: wgpu::TextureAspect::All,
-        //     },
-        //     self.renderer.get_image().as_bytes(),
-        //     wgpu::ImageDataLayout {
-        //         offset: 0,
-        //         bytes_per_row: Some(4 * 4 * size.width),
-        //         rows_per_image: Some(size.height),
-        //     },
-        //     size.into(),
-        // );
+
         {
-            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: "Compute Pass".into() });
+            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: "Compute Pass".into(),
+            });
             compute_pass.set_pipeline(&self.compute_pipeline.pipeline);
             compute_pass.set_bind_group(0, &compute_bind_group, &[]);
             // defined in the shader
             const WORKGROUP_SIZE: u32 = 8;
-            compute_pass.dispatch_workgroups(size.width / WORKGROUP_SIZE,size.height / WORKGROUP_SIZE ,1);
+            compute_pass.dispatch_workgroups(
+                size.width / WORKGROUP_SIZE,
+                size.height / WORKGROUP_SIZE,
+                1,
+            );
         }
         let render_bind_group = self.render_pipeline.bind_group.as_ref().unwrap();
         {
@@ -243,8 +296,11 @@ impl App {
 
     pub fn update(&mut self) {
         self.timer.update();
-        self.renderer.render(&self.camera, &self.scene);
-        self.renderer.update_image_buffer();
+        self.globals.inverse_projection = self.camera.inverse_projection;
+        self.globals.inverse_view = self.camera.inverse_view;
+        self.globals.viewport = Vec2::new(self.camera.viewport_width, self.camera.viewport_height);
+        // self.renderer.render(&self.camera, &self.scene);
+        // self.renderer.update_image_buffer();
     }
     pub fn window(&self) -> &Window {
         &self.window
@@ -256,11 +312,13 @@ impl App {
         if let Some(code) = input.virtual_keycode {
             if code == VirtualKeyCode::P {
                 self.globals.seed = self.globals.seed.wrapping_add(5);
-                println!("sjklhd");
             }
 
             if code == VirtualKeyCode::O {
                 self.globals.seed = self.globals.seed.wrapping_sub(5);
+            }
+            if code == VirtualKeyCode::L {
+                self.scene.spheres[0].radius += 0.1;
             }
         }
         let moved = self.camera.on_keyboard_event(input, self.timer.dt());

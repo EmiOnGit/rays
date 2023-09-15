@@ -21,9 +21,14 @@ impl Renderer {
 
         for (i, pixel) in self.acc_buffer.pixels_mut().enumerate() {
             let c = colors[i];
-            *pixel = [pixel.0[0] + c[0], pixel.0[1] + c[1], pixel.0[2] + c[2], pixel.0[3]].into();
+            *pixel = [
+                pixel.0[0] + c[0],
+                pixel.0[1] + c[1],
+                pixel.0[2] + c[2],
+                pixel.0[3],
+            ]
+            .into();
         }
-        
     }
     pub fn update_image_buffer(&mut self) {
         let mut i = self.acc_buffer.clone();
@@ -32,7 +37,6 @@ impl Renderer {
         });
 
         self.image_buffer = DynamicImage::from(i).into_rgba32f();
-        self.seed = math::pcg_hash(self.seed);
     }
     pub fn per_pixel(&self, x: usize, y: usize, camera: &Camera, scene: &Scene) -> Rgb<f32> {
         let direction = camera.ray_directions[x + y * self.size().width as usize];
@@ -50,14 +54,19 @@ impl Renderer {
                 break;
             };
             let sphere = &scene.spheres[payload.index];
-            let material = scene.material(sphere);
+            let material = scene.materials[sphere.material_index as usize];
             ray.origin = payload.world_position - payload.world_normal * 0.0001;
-            ray.direction = (math::in_unit_sphere(self.seed ^ payload.hit_distance.to_bits().wrapping_mul(payload.index as u32 * 11 + 10))
-                + payload.world_normal)
+            let seed = 10;
+            ray.direction = (math::in_unit_sphere(
+                seed ^ payload
+                    .hit_distance
+                    .to_bits()
+                    .wrapping_mul(payload.index as u32 * 11 + 10),
+            ) + payload.world_normal)
                 / 2.;
-
-            contribution *= Vec3::from(material.albedo.0);
-            light += material.get_emission();
+            let albedo = material.albedo.0;
+            contribution *= Vec3::new(albedo[0], albedo[1], albedo[2]);
+            // light += material.get_emission();
         }
         let raw_c = (light / bounced as f32).to_array();
         let color = Rgb(raw_c);

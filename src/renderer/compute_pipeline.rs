@@ -1,12 +1,14 @@
-use wgpu::{Device, BindGroup, TextureView, BufferBinding, BufferUsages, BufferDescriptor, Buffer};
+use wgpu::{BindGroup, Buffer, BufferDescriptor, BufferUsages};
 
-use crate::globals::{self, Globals};
+use crate::{globals::Globals, material::Material, sphere::Sphere};
 
 pub struct ComputePipeline {
     pub pipeline: wgpu::ComputePipeline,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: Option<BindGroup>,
     pub globals_buffer: Buffer,
+    pub sphere_buffer: Buffer,
+    pub material_buffer: Buffer,
 }
 
 impl ComputePipeline {
@@ -38,15 +40,36 @@ impl ComputePipeline {
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::StorageTexture { 
-                        access: wgpu::StorageTextureAccess::ReadWrite, 
+                    ty: wgpu::BindingType::StorageTexture {
+                        access: wgpu::StorageTextureAccess::ReadWrite,
                         format: wgpu::TextureFormat::Rgba32Float,
-                        view_dimension:wgpu::TextureViewDimension::D2, 
+                        view_dimension: wgpu::TextureViewDimension::D2,
                     },
                     count: None,
                 },
-                
-                
+                // circles
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+
+                    count: None,
+                },
+                // materials
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
             ],
         });
 
@@ -62,37 +85,35 @@ impl ComputePipeline {
             module: &shader,
             entry_point: "main",
         });
-        let globals_buffer = device.create_buffer(&BufferDescriptor { 
-            label: "Globals buffer".into(), 
-            size: std::mem::size_of::<Globals>() as u64, 
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST, 
+        let globals_buffer = device.create_buffer(&BufferDescriptor {
+            label: "Globals buffer".into(),
+            size: std::mem::size_of::<Globals>() as u64,
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let size = std::mem::size_of::<Sphere>() as u64;
+        println!("buffer size: {size}");
+        let sphere_buffer = device.create_buffer(&BufferDescriptor {
+            label: "Spheres buffer".into(),
+            size,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let size = std::mem::size_of::<Material>() as u64;
+
+        let material_buffer = device.create_buffer(&BufferDescriptor {
+            label: "Material buffer".into(),
+            size,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
         Self {
             pipeline,
             bind_group_layout,
             bind_group: None,
+            sphere_buffer,
             globals_buffer,
+            material_buffer,
         }
-    }
-    pub fn prepare_bind_group(&mut self, device: &Device, output_texture_view: TextureView, globals: &Globals) {
-        // self.bind_group = Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
-        //     label: Some("Render bind group"),
-        //     layout: &self.bind_group_layout,
-        //     entries: &[
-        //         wgpu::BindGroupEntry {
-        //             binding: 0,
-        //             resource: wgpu::BindingResource::Buffer(BufferBinding {
-        //                 buffer: globals.,
-        //                 offset: 0,
-        //                 size: None,
-        //             }),
-        //         },
-        //         wgpu::BindGroupEntry {
-        //             binding: 1,
-        //             resource: wgpu::BindingResource::TextureView(&output_texture_view),
-        //         }
-        //     ],
-        // }));
     }
 }

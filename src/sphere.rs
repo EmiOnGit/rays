@@ -1,9 +1,12 @@
 use glam::Vec3;
-
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
 pub struct Sphere {
     pub center: Vec3,
     pub radius: f32,
-    pub material_index: usize,
+    pub material_index: u32,
+    // needed for shader alignment
+    _offset: [f32; 3],
 }
 
 impl Sphere {
@@ -11,7 +14,10 @@ impl Sphere {
         Sphere {
             center,
             radius,
-            material_index,
+            material_index: material_index as u32,
+            _offset: [0.; 3],
         }
     }
 }
+unsafe impl bytemuck::Pod for Sphere {}
+unsafe impl bytemuck::Zeroable for Sphere {}

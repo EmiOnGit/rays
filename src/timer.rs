@@ -14,7 +14,7 @@ impl Timer {
             app_start: Instant::now(),
             frame_starts: vec![Instant::now()],
             frame_count: 0,
-            log_frequency: 300,
+            log_frequency: 2000,
         }
     }
     pub fn update(&mut self) {

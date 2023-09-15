@@ -1,7 +1,7 @@
+pub mod compute_pipeline;
 pub mod image_util;
 mod render;
 pub mod render_pipeline;
-pub mod compute_pipeline;
 
 use image::{Rgba, Rgba32FImage};
 use log::warn;
@@ -15,7 +15,6 @@ pub struct Renderer {
     pub image_buffer: Rgba32FImage,
     acc_buffer: Rgba32FImage,
     acc_frame: usize,
-    seed: u32,
 }
 
 impl Renderer {
@@ -28,7 +27,6 @@ impl Renderer {
             image_buffer,
             acc_buffer,
             acc_frame: 1,
-            seed: 0,
         }
     }
     pub fn size(&self) -> ImageSize {
@@ -46,7 +44,7 @@ impl Renderer {
         );
         self.acc_frame = 0;
         self.acc_buffer =
-        Rgba32FImage::from_pixel(new_size.width, new_size.height, Rgba([0., 0., 0., 0.]));
+            Rgba32FImage::from_pixel(new_size.width, new_size.height, Rgba([0., 0., 0., 0.]));
         self.image_buffer =
             Rgba32FImage::from_pixel(new_size.width, new_size.height, Rgba([0., 0., 0., 0.]));
     }
@@ -64,7 +62,9 @@ impl Renderer {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba32Float,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::STORAGE_BINDING,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::STORAGE_BINDING,
             view_formats: &[],
         })
     }

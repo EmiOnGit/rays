@@ -12,8 +12,8 @@ use crate::math;
 pub struct Camera {
     projection: Mat4,
     view: Mat4,
-    inverse_projection: Mat4,
-    inverse_view: Mat4,
+    pub inverse_projection: Mat4,
+    pub inverse_view: Mat4,
     // vertical fov
     fov: f32,
     near_clip: f32,
@@ -21,8 +21,8 @@ pub struct Camera {
     pub position: Vec3,
     forward: Vec3,
     pub ray_directions: Vec<Vec3>,
-    viewport_height: f32,
-    viewport_width: f32,
+    pub viewport_height: f32,
+    pub viewport_width: f32,
 
     pub last_mouse_position: Option<PhysicalPosition<f64>>,
 }
@@ -35,8 +35,8 @@ impl Camera {
         viewport_width: f32,
         viewport_height: f32,
     ) -> Camera {
-        let forward = Vec3::Z + Vec3::Y * 0.5;
-        let position = -22. * Vec3::Z - 10. *  Vec3::Y;
+        let forward = -Vec3::Z;
+        let position = -Vec3::ZERO;
 
         let mut camera = Camera {
             forward,
@@ -164,5 +164,6 @@ impl Camera {
             self.far_clip,
         );
         self.inverse_projection = self.projection.inverse();
+        println!("inverse projection:{}", self.inverse_projection);
     }
 }

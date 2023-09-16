@@ -5,7 +5,7 @@ use egui_winit::State;
 use wgpu::{CommandEncoder, Device, Queue, RenderPass, TextureFormat};
 use winit::{event::WindowEvent, event_loop::EventLoopWindowTarget};
 
-use crate::scene::Scene;
+use crate::{scene::Scene, globals::Globals};
 
 pub struct UiManager {
     egui_renderer: egui_wgpu::Renderer,
@@ -48,6 +48,7 @@ impl UiManager {
         queue: &Queue,
         window: &winit::window::Window,
         scene: &mut Scene,
+        globals: &mut Globals,
     ) {
         let egui_raw_input = self.state.take_egui_input(window);
         let egui_full_output = self.context.run(egui_raw_input, |ctx| {
@@ -90,12 +91,21 @@ impl UiManager {
             egui::Window::new("Camera").show(ctx, |ui| {
                 ui.label(format!("Transform"));
                 ui.horizontal(|ui| {
+                    
                     ui.add(DragValue::new(&mut scene.camera.position.x).speed(0.01));
                     ui.add(DragValue::new(&mut scene.camera.position.y).speed(0.01));
                     ui.add(DragValue::new(&mut scene.camera.position.z).speed(0.01));
                 });
             });
+            egui::Window::new("Globals").show(ctx, |ui| {
+                ui.label(format!("bounces"));
+                ui.add(DragValue::new(&mut globals.bounces));
+                ui.label(format!("sky color"));
+                let color = &mut globals.sky_color;
+                ui.color_edit_button_rgba_unmultiplied(color)
+            });
         });
+
         for (id, image_delta) in egui_full_output.textures_delta.set {
             self.egui_renderer
                 .update_texture(device, queue, id, &image_delta);

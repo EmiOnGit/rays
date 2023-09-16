@@ -14,7 +14,7 @@ impl Timer {
             app_start: Instant::now(),
             frame_starts: vec![Instant::now()],
             frame_count: 0,
-            log_frequency: 2000,
+            log_frequency: 300, // every 5s in vsync mode with a 60 hz monitor
         }
     }
     pub fn update(&mut self) {
@@ -49,13 +49,11 @@ impl Timer {
             .as_secs_f32()
             * 1000.
             / self.frame_count as f32;
-        let current = self.frame_starts[i_last]
-            .duration_since(self.frame_starts[i_last - 1])
-            .as_secs_f32()
-            * 1000.;
+  
+        let fps = 1000. / avg; 
         info!(
-            "avg {}: {:.2}ms, avg total: {:.2}ms, current: {:.2}ms",
-            self.log_frequency, avg, avg_total, current
+            "avg {}: {:.2}ms, avg total: {:.2}ms, fps {:.?}",
+            self.log_frequency, avg, avg_total, fps
         );
     }
 }

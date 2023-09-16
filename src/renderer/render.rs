@@ -35,7 +35,6 @@ impl Renderer {
         image_util::iter_mut_image_buffer(&mut i).for_each(|pixel| {
             *pixel = *pixel / self.acc_frame as f32;
         });
-
         self.image_buffer = DynamicImage::from(i).into_rgba32f();
     }
     pub fn per_pixel(&self, x: usize, y: usize, camera: &Camera, scene: &Scene) -> Rgb<f32> {

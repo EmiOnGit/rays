@@ -1,18 +1,19 @@
 use wgpu::{BindGroup, Buffer, BufferDescriptor, BufferUsages};
 
-use crate::{globals::Globals, material::Material, sphere::Sphere};
+use crate::{globals::Globals, material::Material, sphere::Sphere, scene::Scene, camera::CameraUniform};
 
 pub struct ComputePipeline {
     pub pipeline: wgpu::ComputePipeline,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: Option<BindGroup>,
     pub globals_buffer: Buffer,
+    pub camera_buffer: Buffer,
     pub sphere_buffer: Buffer,
     pub material_buffer: Buffer,
 }
 
 impl ComputePipeline {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device, scene: &Scene) -> Self {
         // Load shader
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Compute Shader"),
@@ -36,9 +37,20 @@ impl ComputePipeline {
                     },
                     count: None,
                 },
-                // Output image
+                // Camera
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        min_binding_size: None,
+                        has_dynamic_offset: false,
+                    },
+                    count: None,
+                },
+                // Output image
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::StorageTexture {
                         access: wgpu::StorageTextureAccess::ReadWrite,
@@ -49,7 +61,7 @@ impl ComputePipeline {
                 },
                 // circles
                 wgpu::BindGroupLayoutEntry {
-                    binding: 2,
+                    binding: 3,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -61,7 +73,7 @@ impl ComputePipeline {
                 },
                 // materials
                 wgpu::BindGroupLayoutEntry {
-                    binding: 3,
+                    binding: 4,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -91,19 +103,24 @@ impl ComputePipeline {
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let size = std::mem::size_of::<Sphere>() as u64;
-        println!("buffer size: {size}");
+        let camera_buffer = device.create_buffer(&BufferDescriptor {
+            label: "Camera Uniform buffer".into(),
+            size: std::mem::size_of::<CameraUniform>() as u64,
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let size = std::mem::size_of::<Sphere>() * scene.spheres.len() ;
         let sphere_buffer = device.create_buffer(&BufferDescriptor {
             label: "Spheres buffer".into(),
-            size,
+            size: size as u64 ,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let size = std::mem::size_of::<Material>() as u64;
+        let size = std::mem::size_of::<Material>() * scene.materials.len();
 
         let material_buffer = device.create_buffer(&BufferDescriptor {
             label: "Material buffer".into(),
-            size,
+            size: size as u64 ,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -112,6 +129,7 @@ impl ComputePipeline {
             bind_group_layout,
             bind_group: None,
             sphere_buffer,
+            camera_buffer,
             globals_buffer,
             material_buffer,
         }

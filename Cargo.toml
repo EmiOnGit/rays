@@ -12,7 +12,7 @@ wgpu = "0.16.0" # egui-wgpu needs 0.16
 winit = "0.28.6"
 image = "0.24.7"
 simple_logger = "4.2.0"
-glam = "0.24.1"
+glam = { version = "0.24.1", features = ["bytemuck"] }
 rayon = {version = "1.7.0", optional = true}
 itertools = "0.11.0"
 bytemuck = "1.14.0"

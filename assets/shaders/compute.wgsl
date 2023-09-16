@@ -11,13 +11,31 @@ fn rand(seed: u32) -> f32 {
     let hashed = pcg_hash(seed);
     return(f32(hashed) / 0xffffffff.);
 }
+fn in_unit_sphere(seed: u32) -> vec3f {
+    let seed1 = pcg_hash(seed);
+    let seed2 = pcg_hash(seed1);
+    let x = rand(seed);
+    let y = rand(seed1);
+    let z = rand(seed2);
+    return normalize(vec3f(x * 2. - 1., y * 2. - 1., z * 2. - 1.));
+
+
+}
 struct Globals {
     seed: u32,
-    viewport_width: f32,
-    viewport_height: f32,
+    bounces: u32,
+    sky_color: vec4f,
+}
+struct Camera {
+    fov: vec2f,
+    viewport: vec2f,
+    camera_position: vec4f,
+    o1: vec4f,
+    o2: vec4f,
     inverse_projection: mat4x4f,
     inverse_view: mat4x4f,
-    camera_position: vec3f,
+    o3: mat4x4f,
+    
 }
 struct Sphere {
     center: vec3<f32>,
@@ -31,46 +49,111 @@ struct Material {
 var<uniform> globals: Globals;
 
 @group(0) @binding(1)
-var output_texture: texture_storage_2d<rgba32float, read_write>;
+var<uniform> camera: Camera;
 
 @group(0) @binding(2)
-var<storage> spheres: array<Sphere>;
+var output_texture: texture_storage_2d<rgba32float, read_write>;
 
 @group(0) @binding(3)
-var<storage> materials: array<Material>;
+var<storage> spheres: array<Sphere>;
 
+@group(0) @binding(4)
+var<storage> materials: array<Material>;
+fn calc_ray_direction(
+    invocation_id: vec3u
+) -> vec3f {
+    var coord = vec2f(f32(invocation_id.x), f32(invocation_id.y)) / camera.viewport ;
+    coord = coord * 2. - vec2f(1.);
+    let target1 = camera.inverse_projection * vec4f(coord,1.,1.);
+    let target2 = normalize(target1.xyz / target1.w);
+    let ray_direction = (camera.inverse_view * vec4f(target2, 0.)).xyz;
+    return ray_direction;
+}
+struct HitPayload {
+    normal: vec3f,
+    hit_position: vec3f,
+    sphere_index: i32,
+    hit_distance: f32,
+}
+fn trace_ray(
+    ray_origin: vec3f,
+    ray_direction: vec3f,
+) -> HitPayload {
+    var closest_hit_distance = -1.;
+    var closest_index = 0;
+    let sphere_count = i32(arrayLength(&spheres));
+    for (var i = 0; i < sphere_count; i++) {
+        let sphere = spheres[i];
+        let origin = ray_origin - sphere.center; // camera at origin for now
+        let a = dot(ray_direction, ray_direction);
+        let b = 2. * dot(origin, ray_direction);
+        let c = dot(origin,origin) - sphere.radius * sphere.radius;
+        let discriminant = b * b - 4. * a * c;
+        if (discriminant < 0.) {
+            continue;
+        }
+        let hit_distance = (-b - sqrt(discriminant)) / (2. * a);
+        if (hit_distance > 0. && (closest_hit_distance == -1. || closest_hit_distance > hit_distance )) {
+            closest_hit_distance = hit_distance;
+            closest_index = i;
+        }
+        
+    }
+    var payload: HitPayload;
+
+    if (closest_hit_distance == -1.) {
+        // no hit
+        payload.sphere_index = -1;
+        return payload;
+    }
+    let sphere = spheres[closest_index];
+    let origin = camera.camera_position.xyz - sphere.center; // camera at origin for now
+
+    let hit_point = (origin + ray_direction * closest_hit_distance);
+    let normal = (hit_point - sphere.center) / sphere.radius;
+    payload.normal = normal;
+    payload.hit_position = hit_point;
+    payload.hit_distance = closest_hit_distance;
+    payload.sphere_index = i32(closest_index);
+    return payload;
+}
 @compute
 @workgroup_size(8, 8, 1)
 fn main(
     @builtin(global_invocation_id)
     invocation_id: vec3<u32>
 ) {
-    // calculate ray directions
-    var coord = vec2f(f32(invocation_id.x), f32(invocation_id.y)) / vec2f(globals.viewport_width, globals.viewport_height) ;
-    coord = coord * 2. - vec2f(1.);
-    let target1 = globals.inverse_projection * vec4f(coord,1.,1.);
-    let target2 = normalize(target1.xyz / target1.w);
-    let ray_direction = (globals.inverse_view * vec4f(target2, 0.)).xyz;
-    // trace ray
-
-    let sphere = spheres[0];
-    let origin = globals.camera_position - sphere.center; // camera at origin for now
-    let radius = sphere.radius;
-    let a = dot(ray_direction, ray_direction);
-    let b = 2. * dot(origin, ray_direction);
-    let c = dot(origin,origin) - radius * radius;
-    let discriminant = b * b - 4. * a * c;
-
-    let location = vec2i(i32(invocation_id.x), i32(invocation_id.y));
-
-    if (discriminant < 0.) {
-        // no hit
-        textureStore(output_texture, location, vec4f(0.));
-    } else {
-        // hit
+    var seed = pcg_hash(globals.seed * (invocation_id.y + 3u) + (globals.seed ^ (invocation_id.x * 4389u)));
+    var ray_direction = calc_ray_direction(invocation_id);
+    var ray_origin = camera.camera_position.xyz;
+    var light = vec3f(0.);
+    var contribution = vec3f(1.);
+    let image_location = vec2i(i32(invocation_id.x), i32(invocation_id.y));
+    var bounced = globals.bounces;
+    for (var i = 0; i < i32(globals.bounces); i++) {
+        let payload = trace_ray(ray_origin, ray_direction);
+        if (payload.sphere_index == -1) {
+                // no hit
+                // x = g
+                // y = b
+                // z = a
+                // w = 0 
+                light = light + globals.sky_color.xyz * contribution;
+                bounced = 1u + u32(i);
+                break;
+        }
+        let sphere = spheres[payload.sphere_index];
         let material = materials[sphere.material_index];
-        textureStore(output_texture, location, vec4f(material.albedo));
+        ray_origin = payload.hit_position - payload.normal * 0.0001;
+        seed = pcg_hash(seed + 1u);
+        ray_direction = (in_unit_sphere(seed) + payload.normal) / 2.;
+        contribution *= material.albedo.xyz;
     }
+
+    let color = light / f32(bounced);
+    
+    // hit
+    textureStore(output_texture, image_location, vec4f(color, 1.));
 
 
     // let ran = invocation_id.x + invocation_id.y * 747796405u;

@@ -1,6 +1,4 @@
-use glam::{Mat4, Quat, Vec2, Vec3, Vec4, Vec4Swizzles};
-#[cfg(feature = "rayon")]
-use rayon::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
+use glam::{Mat4, Quat, Vec2, Vec3};
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event::{KeyboardInput, VirtualKeyCode},
@@ -36,7 +34,7 @@ impl Camera {
         viewport_height: f32,
     ) -> Camera {
         let forward = -Vec3::Z;
-        let position = -Vec3::ZERO;
+        let position = 3. * Vec3::Z;
 
         let mut camera = Camera {
             forward,
@@ -55,7 +53,6 @@ impl Camera {
         };
         camera.recalculate_view();
         camera.recalculate_projection();
-        camera.calculate_ray_directions();
         camera
     }
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
@@ -69,7 +66,7 @@ impl Camera {
         self.recalculate_projection();
         self.recalculate_view();
 
-        self.calculate_ray_directions();
+        // self.calculate_ray_directions();
     }
     pub fn on_keyboard_event(&mut self, input: &KeyboardInput, dt: f32) -> bool {
         let speed = 20. * dt;
@@ -85,7 +82,6 @@ impl Camera {
             _ => return false,
         }
         self.recalculate_view();
-        self.calculate_ray_directions();
         true
     }
     pub fn on_rotate(&mut self, mouse_position: &PhysicalPosition<f64>) {
@@ -101,56 +97,12 @@ impl Camera {
                 let q = math::cross(q1, q2).normalize();
                 self.forward = q * self.forward;
                 self.recalculate_view();
-                self.calculate_ray_directions();
                 self.last_mouse_position = Some(*mouse_position);
             }
             None => self.last_mouse_position = Some(*mouse_position),
         }
     }
-    #[cfg(feature = "rayon")]
-    fn calculate_ray_directions(&mut self) {
-        let height = self.viewport_height as usize;
-        let width = self.viewport_width as usize;
-        #[cfg(feature = "rayon")]
-        (0..height * width)
-            .into_par_iter()
-            .map(|i| {
-                let x = i % width;
-                let y = i / width;
-                let mut coord = Vec2::new(
-                    x as f32 / self.viewport_width,
-                    y as f32 / self.viewport_height,
-                );
-                coord = coord * 2. - Vec2::ONE;
-                let target = self.inverse_projection * Vec4::new(coord.x, coord.y, 1., 1.);
-                let target = (target.xyz() / target.w).normalize();
-
-                (self.inverse_view * Vec4::new(target.x, target.y, target.z, 0.)).xyz()
-            })
-            .collect_into_vec(&mut self.ray_directions);
-    }
-    #[cfg(not(feature = "rayon"))]
-    fn calculate_ray_directions(&mut self) {
-        let height = self.viewport_height as usize;
-        let width = self.viewport_width as usize;
-
-        self.ray_directions = (0..height * width)
-            .into_iter()
-            .map(|i| {
-                let x = i % width;
-                let y = i / width;
-                let mut coord = Vec2::new(
-                    x as f32 / self.viewport_width,
-                    y as f32 / self.viewport_height,
-                );
-                coord = coord * 2. - Vec2::ONE;
-                let target = self.inverse_projection * Vec4::new(coord.x, coord.y, 1., 1.);
-                let target = (target.xyz() / target.w).normalize();
-
-                (self.inverse_view * Vec4::new(target.x, target.y, target.z, 0.)).xyz()
-            })
-            .collect();
-    }
+    
     fn recalculate_view(&mut self) {
         self.view = Mat4::look_at_rh(self.position, self.position + self.forward, Vec3::Y);
         self.inverse_view = self.view.inverse();
@@ -164,6 +116,35 @@ impl Camera {
             self.far_clip,
         );
         self.inverse_projection = self.projection.inverse();
-        println!("inverse projection:{}", self.inverse_projection);
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct CameraUniform {
+    pub fov: [f32;2],
+    pub viewport: [f32; 2],
+    pub camera_position: [f32; 4],
+    pub _offset1: [f32; 8],
+    pub inverse_projection: [f32; 16],
+    pub inverse_view: [f32; 16],
+    pub _offset2: [f32; 16],
+}
+
+impl From<&Camera> for CameraUniform {
+    fn from(cam: &Camera) -> Self {
+        let viewport = [cam.viewport_width, cam.viewport_height];
+        let camera_position = cam.position.extend(0.).to_array();
+        let inverse_projection = cam.inverse_projection.to_cols_array();
+        let inverse_view = cam.inverse_view.to_cols_array();
+        Self {
+            fov: [cam.fov;2],
+            viewport,
+            _offset1: [0.;8],
+            camera_position,
+            inverse_projection,
+            inverse_view,
+            _offset2: [0.;16],
+        }
     }
 }

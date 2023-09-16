@@ -1,7 +1,6 @@
 use std::iter::{self};
 
 use egui_wgpu::renderer::ScreenDescriptor;
-use glam::{Mat4, Vec2, Vec3};
 use log::info;
 use wgpu::{util::DeviceExt, BufferAddress, Features, Label, Limits, PresentMode};
 use winit::{
@@ -18,7 +17,7 @@ use crate::{
     scene::Scene,
     sphere::Sphere,
     timer::Timer,
-    ui::UiManager,
+    ui::UiManager, math::pcg_hash, camera::CameraUniform,
 };
 
 pub struct App {
@@ -35,6 +34,7 @@ pub struct App {
     renderer: Renderer,
     pub scene: Scene,
     globals: Globals,
+    camera_uniform: CameraUniform,
 
     render_pipeline: RenderPipeline,
     compute_pipeline: ComputePipeline,
@@ -97,7 +97,7 @@ impl App {
             format: surface_format,
             width: size.width,
             height: size.height,
-            present_mode: PresentMode::Mailbox,
+            present_mode: PresentMode::AutoVsync,
             alpha_mode: surface_capabilities.alpha_modes[0],
             view_formats: vec![],
         };
@@ -109,20 +109,19 @@ impl App {
         let input_texture_view = input_texture.create_view(&wgpu::TextureViewDescriptor::default());
         let render_pipeline =
             RenderPipeline::new(&device, &surface_config, input_texture_view, input_texture);
-        let compute_pipeline = ComputePipeline::new(&device);
+        let compute_pipeline = ComputePipeline::new(&device,&scene);
         let globals = Globals {
             seed: 105,
-            viewport: Vec2::ONE * 1000.,
-            inverse_projection: Mat4::IDENTITY,
-            inverse_view: Mat4::IDENTITY,
-            camera_position: Vec3::ZERO,
-            _offset: 0.
+            bounces: 3,
+            sky_color: [0.1,0.05,0.05, 1.],
+            _offset: [0.;2],
         };
         let timer = Timer::new();
         let screen_descriptor = ScreenDescriptor {
             size_in_pixels: [surface_config.width, surface_config.height],
             pixels_per_point: 1.,
         };
+        let camera_uniform = CameraUniform::from(&scene.camera);
         let ui_manager = UiManager::new(&device, surface_format, screen_descriptor, event_loop);
         Self {
             window,
@@ -130,6 +129,7 @@ impl App {
             device,
             render_pipeline,
             compute_pipeline,
+            camera_uniform,
             surface_config,
             timer,
             globals,
@@ -163,7 +163,7 @@ impl App {
     }
     pub fn render_ui(&mut self) {
         self.ui_manager
-            .run(&self.device, &self.queue, &self.window, &mut self.scene);
+            .run(&self.device, &self.queue, &self.window, &mut self.scene, &mut self.globals);
     }
     pub fn prepare(&mut self) -> Result<(), wgpu::SurfaceError> {
         let input_texture = self.renderer.create_input_texture(&self.device);
@@ -205,15 +205,30 @@ impl App {
                 0,
                 globals_size as BufferAddress,
             );
-            let sphere = self.scene.spheres[0];
+            let camera_size = std::mem::size_of::<CameraUniform>();
+            let camera_buffer =
+                self.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: "Camera buffer".into(),
+                        contents: bytemuck::cast_slice(&[self.camera_uniform]),
+                        usage: wgpu::BufferUsages::COPY_SRC,
+                    });
+
+            encoder.copy_buffer_to_buffer(
+                &camera_buffer,
+                0,
+                &self.compute_pipeline.camera_buffer,
+                0,
+                camera_size as BufferAddress,
+            );
             let sphere_buffer = self
                 .device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: "Sphere buffer".into(),
-                    contents: bytemuck::cast_slice(&[sphere]),
+                    contents: bytemuck::cast_slice(&self.scene.spheres[..]),
                     usage: wgpu::BufferUsages::COPY_SRC,
                 });
-            let sphere_size = std::mem::size_of::<Sphere>();
+            let sphere_size = std::mem::size_of::<Sphere>() * self.scene.spheres.len();
             encoder.copy_buffer_to_buffer(
                 &sphere_buffer,
                 0,
@@ -251,12 +266,20 @@ impl App {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
+                    resource: wgpu::BindingResource::Buffer(
+                        self.compute_pipeline
+                            .camera_buffer
+                            .as_entire_buffer_binding(),
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
                     resource: wgpu::BindingResource::TextureView(
                         &self.render_pipeline.input_texture_view,
                     ),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 2,
+                    binding: 3,
                     resource: wgpu::BindingResource::Buffer(
                         self.compute_pipeline
                             .sphere_buffer
@@ -264,7 +287,7 @@ impl App {
                     ),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 3,
+                    binding: 4,
                     resource: wgpu::BindingResource::Buffer(
                         self.compute_pipeline
                             .material_buffer
@@ -339,10 +362,8 @@ impl App {
 
     pub fn update(&mut self) {
         self.timer.update();
-        self.globals.inverse_projection = self.scene.camera.inverse_projection;
-        self.globals.inverse_view = self.scene.camera.inverse_view;
-        self.globals.viewport = Vec2::new(self.scene.camera.viewport_width, self.scene.camera.viewport_height);
-        self.globals.camera_position = self.scene.camera.position;
+        self.camera_uniform = CameraUniform::from(&self.scene.camera);
+        self.globals.seed = pcg_hash(self.globals.seed);
         // self.renderer.render(&self.camera, &self.scene);
         // self.renderer.update_image_buffer();
     }

@@ -10,9 +10,9 @@ pub struct Scene {
 impl Scene {
     pub fn example_scene() -> Scene {
         let spheres = vec![
-            Sphere::new(Vec3::Z * 2., 0.5, 0),
-            // Sphere::new(Vec3::new(-2.5, -1., -3.), 0.5, 1),
-            // Sphere::new(Vec3::new(1., 1000., 3.), 1000.0, 4),
+            Sphere::new(Vec3::ZERO, 0.5, 0),
+            Sphere::new(Vec3::new(0.8, -0.45, -0.7), 1., 1),
+            Sphere::new(Vec3::new(0.7, 0.4, -0.05), 0.2, 1),
         ];
         // let p = 0x372f;
         // let count = 100;
@@ -23,7 +23,7 @@ impl Scene {
         //     let center = Vec3::new(x, -radius, z);
         //     spheres.push(Sphere::new(center, radius, i as usize % 5 + 1))
         // }
-        let materials = vec![Material::new([0.0, 1.0, 1.0])];
+        let materials = vec![Material::new([1.0, 1.0, 1.0])];
         let camera = Camera::new(45., 0.1, 100., 1., 1.);
 
         Scene { spheres, materials, camera }

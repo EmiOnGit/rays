@@ -33,8 +33,8 @@ impl Camera {
         viewport_width: f32,
         viewport_height: f32,
     ) -> Camera {
-        let forward = -Vec3::Z;
-        let position = 3. * Vec3::Z;
+        let forward = -Vec3::X;
+        let position = 0. * Vec3::Z;
 
         let mut camera = Camera {
             forward,
@@ -82,6 +82,7 @@ impl Camera {
             _ => return false,
         }
         self.recalculate_view();
+        self.recalculate_projection();
         true
     }
     pub fn on_rotate(&mut self, mouse_position: &PhysicalPosition<f64>) {
@@ -97,6 +98,8 @@ impl Camera {
                 let q = math::cross(q1, q2).normalize();
                 self.forward = q * self.forward;
                 self.recalculate_view();
+                self.recalculate_projection();
+
                 self.last_mouse_position = Some(*mouse_position);
             }
             None => self.last_mouse_position = Some(*mouse_position),

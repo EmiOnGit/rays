@@ -79,8 +79,8 @@ fn trace_ray(
     ray_origin: vec3f,
     ray_direction: vec3f,
 ) -> HitPayload {
-    var closest_hit_distance = -1.;
-    var closest_index = 0;
+    var closest_hit_distance = 999999999.;
+    var closest_index = -1;
     let sphere_count = i32(arrayLength(&spheres));
     for (var i = 0; i < sphere_count; i++) {
         let sphere = spheres[i];
@@ -93,28 +93,27 @@ fn trace_ray(
             continue;
         }
         let hit_distance = (-b - sqrt(discriminant)) / (2. * a);
-        if (hit_distance > 0. && (closest_hit_distance == -1. || closest_hit_distance > hit_distance )) {
+        if (hit_distance > 0. && closest_hit_distance > hit_distance ) {
             closest_hit_distance = hit_distance;
             closest_index = i;
         }
         
     }
     var payload: HitPayload;
+    payload.sphere_index = closest_index;
 
-    if (closest_hit_distance == -1.) {
+    if (closest_index == -1) {
         // no hit
-        payload.sphere_index = -1;
         return payload;
     }
     let sphere = spheres[closest_index];
-    let origin = camera.camera_position.xyz - sphere.center; // camera at origin for now
+    let origin = ray_origin - sphere.center; 
 
     let hit_point = (origin + ray_direction * closest_hit_distance);
-    let normal = (hit_point - sphere.center) / sphere.radius;
+    let normal = normalize(hit_point);
     payload.normal = normal;
-    payload.hit_position = hit_point;
+    payload.hit_position = hit_point + sphere.center;
     payload.hit_distance = closest_hit_distance;
-    payload.sphere_index = i32(closest_index);
     return payload;
 }
 @compute
@@ -130,27 +129,23 @@ fn main(
     var contribution = vec3f(1.);
     let image_location = vec2i(i32(invocation_id.x), i32(invocation_id.y));
     var bounced = globals.bounces;
-    for (var i = 0; i < i32(globals.bounces); i++) {
+    for (var i = 0; i < i32(globals.bounces) ; i++) {
         let payload = trace_ray(ray_origin, ray_direction);
         if (payload.sphere_index == -1) {
-                // no hit
-                // x = g
-                // y = b
-                // z = a
-                // w = 0 
+                
                 light = light + globals.sky_color.xyz * contribution;
                 bounced = 1u + u32(i);
                 break;
         }
         let sphere = spheres[payload.sphere_index];
         let material = materials[sphere.material_index];
-        ray_origin = payload.hit_position - payload.normal * 0.0001;
+        ray_origin = payload.hit_position + payload.normal * 0.0001;
         seed = pcg_hash(seed + 1u);
-        ray_direction = (in_unit_sphere(seed) + payload.normal) / 2.;
+        ray_direction = normalize(in_unit_sphere(seed) + payload.normal);
         contribution *= material.albedo.xyz;
     }
 
-    let color = light / f32(bounced);
+    let color = light;
     
     // hit
     textureStore(output_texture, image_location, vec4f(color, 1.));

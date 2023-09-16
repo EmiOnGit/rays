@@ -112,8 +112,8 @@ impl App {
         let compute_pipeline = ComputePipeline::new(&device,&scene);
         let globals = Globals {
             seed: 105,
-            bounces: 3,
-            sky_color: [0.1,0.05,0.05, 1.],
+            bounces: 30,
+            sky_color: [0.9,0.9,0.9, 1.],
             _offset: [0.;2],
         };
         let timer = Timer::new();
@@ -240,10 +240,10 @@ impl App {
                 self.device
                     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: "Material buffer".into(),
-                        contents: bytemuck::cast_slice(&[self.scene.materials[0]]),
+                        contents: bytemuck::cast_slice(&self.scene.materials[..]),
                         usage: wgpu::BufferUsages::COPY_SRC,
                     });
-            let material_size = std::mem::size_of::<Material>();
+            let material_size = std::mem::size_of::<Material>()  * self.scene.materials.len();
             encoder.copy_buffer_to_buffer(
                 &material_buffer,
                 0,

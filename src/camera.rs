@@ -34,7 +34,7 @@ impl Camera {
         viewport_height: f32,
     ) -> Camera {
         let forward = -Vec3::X;
-        let position = 0. * Vec3::Z;
+        let position =  Vec3::new(77.7,-7.4,10.) ;
 
         let mut camera = Camera {
             forward,

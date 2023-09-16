@@ -2,6 +2,8 @@
 
 @group(0) @binding(0)
 var tex: texture_2d<f32>;
+@group(0) @binding(1)
+var<uniform> acc_frame: u32;
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
 };
@@ -31,8 +33,7 @@ fn vs_main(
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    var color = textureLoad(tex, vec2<u32>(u32(in.clip_position.x), u32(in.clip_position.y)),0);
-    color[3] = 0.5;
+    var color = textureLoad(tex, vec2<u32>(u32(in.clip_position.x), u32(in.clip_position.y)),0) / f32(acc_frame);
     return color;
 }
  

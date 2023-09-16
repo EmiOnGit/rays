@@ -49,61 +49,76 @@ impl UiManager {
         window: &winit::window::Window,
         scene: &mut Scene,
         globals: &mut Globals,
-    ) {
+    ) -> bool {
         let egui_raw_input = self.state.take_egui_input(window);
+        let mut reset_renderer = false;
         let egui_full_output = self.context.run(egui_raw_input, |ctx| {
-            egui::Window::new("Scene").show(ctx, |ui| {
-                for (i, sphere) in scene.spheres.iter_mut().enumerate() {
-                    ui.heading(RichText::new("Spheres").color(self.header_color));
+            egui::Window::new("Scene").vscroll(true).show(ctx, |ui| {
+                ui.heading(RichText::new("Materials").color(self.header_color));
 
-                    ui.group(|ui| {
-                        ui.label(format!("Sphere {i}"));
+                for (i, material) in scene.materials.iter_mut().enumerate() {
+                    ui.collapsing(format!("Material {i}"), |ui| {
                         ui.horizontal(|ui| {
-                            ui.label("position");
-                            ui.add(DragValue::new(&mut sphere.center.x).speed(0.01));
-                            ui.add(DragValue::new(&mut sphere.center.y).speed(0.01));
-                            ui.add(DragValue::new(&mut sphere.center.z).speed(0.01));
+                            ui.label("color");
+                            let color = &mut material.albedo.0;
+                            reset_renderer |= ui.color_edit_button_rgba_unmultiplied(color).changed();
                         });
                         ui.horizontal(|ui| {
-                            ui.label("radius");
-                            ui.add(DragValue::new(&mut sphere.radius).speed(0.001));
+                            ui.label("emission");
+                            let color = &mut material.emission.0;
+                            reset_renderer |= ui.color_edit_button_rgba_unmultiplied(color).changed();
                         });
                         ui.horizontal(|ui| {
-                            ui.label("material");
-                            ui.add(DragValue::new(&mut sphere.material_index).clamp_range(0..=scene.materials.len() - 1));
+                            ui.label("emission strength");
+                            let color = &mut material.emission.0[3];
+                            reset_renderer |= ui.add(DragValue::new(color).speed(0.01)).changed();
+
                         });
                     });
                 }
                 ui.add_space(10.);
-                ui.heading(RichText::new("Materials").color(self.header_color));
 
-                for (i, material) in scene.materials.iter_mut().enumerate() {
-                    ui.group(|ui| {
-                        ui.label(format!("Material {i}"));
+                ui.heading(RichText::new("Spheres").color(self.header_color));
+                for (i, sphere) in scene.spheres.iter_mut().enumerate() {
+                    ui.collapsing(format!("Sphere {i}"), |ui| {
+
                         ui.horizontal(|ui| {
-                            ui.label("color");
-                            let color = &mut material.albedo.0;
-                            ui.color_edit_button_rgba_unmultiplied(color).changed();
+                            ui.label("position");
+                            reset_renderer |= ui.add(DragValue::new(&mut sphere.center.x).speed(0.01)).changed() ;
+                            reset_renderer |= ui.add(DragValue::new(&mut sphere.center.y).speed(0.01)).changed();
+                            reset_renderer |= ui.add(DragValue::new(&mut sphere.center.z).speed(0.01)).changed();
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("radius");
+                            reset_renderer |= ui.add(DragValue::new(&mut sphere.radius).speed(0.001)).changed();
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("material index");
+                            reset_renderer |= ui.add(DragValue::new(&mut sphere.material_index).clamp_range(0..=scene.materials.len() - 1)).changed();
                         });
                     });
                 }
+                
             });
+          
             egui::Window::new("Camera").show(ctx, |ui| {
                 ui.label(format!("Transform"));
                 ui.horizontal(|ui| {
                     
-                    ui.add(DragValue::new(&mut scene.camera.position.x).speed(0.01));
-                    ui.add(DragValue::new(&mut scene.camera.position.y).speed(0.01));
-                    ui.add(DragValue::new(&mut scene.camera.position.z).speed(0.01));
+                    reset_renderer |= ui.add(DragValue::new(&mut scene.camera.position.x).speed(0.01)).changed();
+                    reset_renderer |= ui.add(DragValue::new(&mut scene.camera.position.y).speed(0.01)).changed();
+                    reset_renderer |= ui.add(DragValue::new(&mut scene.camera.position.z).speed(0.01)).changed();
                 });
             });
+           
             egui::Window::new("Globals").show(ctx, |ui| {
                 ui.label(format!("bounces"));
-                ui.add(DragValue::new(&mut globals.bounces));
+                reset_renderer |= ui.add(DragValue::new(&mut globals.bounces)).changed();
                 ui.label(format!("sky color"));
                 let color = &mut globals.sky_color;
-                ui.color_edit_button_rgba_unmultiplied(color)
+                reset_renderer |= ui.color_edit_button_rgba_unmultiplied(color).changed();
             });
+            
         });
 
         for (id, image_delta) in egui_full_output.textures_delta.set {
@@ -111,6 +126,7 @@ impl UiManager {
                 .update_texture(device, queue, id, &image_delta);
         }
         self.egui_primitives = self.context.tessellate(egui_full_output.shapes);
+        reset_renderer
     }
     pub fn update_buffers(&mut self, encoder: &mut CommandEncoder, device: &Device, queue: &Queue) {
         let _commands = self.egui_renderer.update_buffers(

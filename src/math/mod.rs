@@ -1,10 +1,14 @@
 use glam::{Quat, Vec3, Vec4, Vec4Swizzles};
 
-pub mod ray;
-/// Returns a random float between 0 and 1
-pub fn rand(mut seed: u32) -> f32 {
-    seed = pcg_hash(seed);
-    seed as f32 / u32::MAX as f32
+/// Returns a random Vec3 with values between 0 and 1
+pub fn rand_vec(mut seed: u32) -> Vec3 {
+    let seed1 = pcg_hash(seed);
+    let seed2 = pcg_hash(seed1);
+    seed = pcg_hash(seed2);
+    let v1 = seed1 as f32 / u32::MAX as f32;
+    let v2 = seed2 as f32 / u32::MAX as f32;
+    let v3 = seed as f32 / u32::MAX as f32;
+    Vec3::new(v1,v2,v3)
 }
 
 pub fn pcg_hash(seed: u32) -> u32 {
@@ -22,12 +26,4 @@ pub fn cross(q1: Quat, q2: Quat) -> Quat {
     let y = q1.wyz().dot(q2.ywx()) - q1.x * q2.z;
     let z = q1.wzx().dot(q2.zwy()) - q1.y * q2.x;
     Quat::from_xyzw(x, y, z, w)
-}
-pub fn in_unit_sphere(seed: u32) -> Vec3 {
-    let seed2 = pcg_hash(seed);
-    let seed3 = pcg_hash(seed2);
-    let x = rand(seed);
-    let y = rand(seed2);
-    let z = rand(seed3);
-    Vec3::new(x * 2. - 1., y * 2. - 1., z * 2. - 1.).normalize()
 }

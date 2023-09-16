@@ -5,7 +5,7 @@ use log::info;
 use wgpu::{util::DeviceExt, BufferAddress, Features, Label, Limits, PresentMode};
 use winit::{
     dpi::PhysicalSize,
-    event::{KeyboardInput, VirtualKeyCode, WindowEvent},
+    event::{KeyboardInput, WindowEvent},
     event_loop::EventLoop,
     window::Window,
 };
@@ -35,7 +35,6 @@ pub struct App {
     pub scene: Scene,
     globals: Globals,
     camera_uniform: CameraUniform,
-
     render_pipeline: RenderPipeline,
     compute_pipeline: ComputePipeline,
     timer: Timer,
@@ -113,7 +112,7 @@ impl App {
         let globals = Globals {
             seed: 105,
             bounces: 30,
-            sky_color: [0.9,0.9,0.9, 1.],
+            sky_color: [0.,0.,0.0005, 1.],
             _offset: [0.;2],
         };
         let timer = Timer::new();
@@ -142,6 +141,8 @@ impl App {
     }
     pub fn clear_renderer(&mut self) {
         self.renderer.reset_acc();
+        let input_texture = self.renderer.create_input_texture(&self.device);
+        self.render_pipeline.set_input_texture(input_texture);
     }
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
         self.renderer.resize(new_size);
@@ -162,16 +163,15 @@ impl App {
         self.ui_manager.handle_window_event(window_event);
     }
     pub fn render_ui(&mut self) {
-        self.ui_manager
+        let renderer_need_reset = self.ui_manager
             .run(&self.device, &self.queue, &self.window, &mut self.scene, &mut self.globals);
+        if renderer_need_reset {
+            self.clear_renderer();
+        }
     }
     pub fn prepare(&mut self) -> Result<(), wgpu::SurfaceError> {
-        let input_texture = self.renderer.create_input_texture(&self.device);
-        self.render_pipeline.set_input_texture(input_texture);
-
         let surface_texture = self.surface.get_current_texture()?;
         self.render_pipeline.surface_texture = Some(surface_texture);
-
         self.render_pipeline.prepare_bind_group(&self.device);
         Ok(())
     }
@@ -311,7 +311,24 @@ impl App {
                 1,
             );
         }
+        {
+            let acc_size = std::mem::size_of::<u32>();
+            let acc_frame_buffer =
+                self.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: "Acc frame buffer".into(),
+                        contents: bytemuck::cast_slice(&[self.renderer.acc_frame]),
+                        usage: wgpu::BufferUsages::COPY_SRC,
+                    });
 
+            encoder.copy_buffer_to_buffer(
+                &acc_frame_buffer,
+                0,
+                &self.render_pipeline.acc_frame_buffer,
+                0,
+                acc_size as BufferAddress,
+            );
+        }
         let render_bind_group = self.render_pipeline.bind_group.as_ref().unwrap();
         {
             let view = self.render_pipeline.surface_texture_view();
@@ -364,8 +381,7 @@ impl App {
         self.timer.update();
         self.camera_uniform = CameraUniform::from(&self.scene.camera);
         self.globals.seed = pcg_hash(self.globals.seed);
-        // self.renderer.render(&self.camera, &self.scene);
-        // self.renderer.update_image_buffer();
+        self.renderer.acc_frame += 1;
     }
     pub fn window(&self) -> &Window {
         &self.window
@@ -374,18 +390,7 @@ impl App {
         false
     }
     pub fn handle_keyboard_input(&mut self, input: &KeyboardInput) {
-        if let Some(code) = input.virtual_keycode {
-            if code == VirtualKeyCode::P {
-                self.globals.seed = self.globals.seed.wrapping_add(5);
-            }
-
-            if code == VirtualKeyCode::O {
-                self.globals.seed = self.globals.seed.wrapping_sub(5);
-            }
-            if code == VirtualKeyCode::L {
-                self.scene.spheres[0].radius += 0.1;
-            }
-        }
+        
         let moved = self.scene.camera.on_keyboard_event(input, self.timer.dt());
         if moved {
             self.clear_renderer();

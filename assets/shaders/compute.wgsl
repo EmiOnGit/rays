@@ -44,6 +44,8 @@ struct Sphere {
 }
 struct Material {
     albedo: vec4<f32>,
+    emission_color: vec3<f32>,
+    emission_strength: f32,
 }
 @group(0) @binding(0)
 var<uniform> globals: Globals;
@@ -132,10 +134,9 @@ fn main(
     for (var i = 0; i < i32(globals.bounces) ; i++) {
         let payload = trace_ray(ray_origin, ray_direction);
         if (payload.sphere_index == -1) {
-                
-                light = light + globals.sky_color.xyz * contribution;
-                bounced = 1u + u32(i);
-                break;
+            light = light + globals.sky_color.xyz * contribution;
+            bounced = 1u + u32(i);
+            break;
         }
         let sphere = spheres[payload.sphere_index];
         let material = materials[sphere.material_index];
@@ -143,18 +144,12 @@ fn main(
         seed = pcg_hash(seed + 1u);
         ray_direction = normalize(in_unit_sphere(seed) + payload.normal);
         contribution *= material.albedo.xyz;
+        light += material.emission_color * material.emission_strength * contribution;
     }
 
-    let color = light;
+    let color = sqrt(light / f32(bounced));
     
     // hit
-    textureStore(output_texture, image_location, vec4f(color, 1.));
-
-
-    // let ran = invocation_id.x + invocation_id.y * 747796405u;
-    // let r = rand(ran * globals.seed);
-    // let g = rand(ran * 392813u * globals.seed);
-    // let b = rand(ran * 436727u * globals.seed);
-    // let color = vec4<f32>(r, g, b * spheres[0].radius,1.);
-    // textureStore(output_texture, location, color);
+    let old_color = textureLoad(output_texture, image_location);
+    textureStore(output_texture, image_location, vec4f(color, 1.) + old_color);
 }

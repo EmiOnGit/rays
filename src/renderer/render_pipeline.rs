@@ -1,6 +1,6 @@
 use wgpu::{
     BindGroup, Device, SurfaceConfiguration, SurfaceTexture, Texture, TextureView,
-    TextureViewDescriptor,
+    TextureViewDescriptor, Buffer, BufferDescriptor, BufferUsages,
 };
 
 pub struct RenderPipeline {
@@ -10,6 +10,7 @@ pub struct RenderPipeline {
     pub surface_texture: Option<SurfaceTexture>,
     pub input_texture_view: TextureView,
     pub input_texture: Texture,
+    pub acc_frame_buffer: Buffer,
 }
 
 impl RenderPipeline {
@@ -37,6 +38,13 @@ impl RenderPipeline {
                         view_dimension: wgpu::TextureViewDimension::D2,
                         multisampled: false,
                     },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
+                        
                     count: None,
                 },
             ],
@@ -86,10 +94,17 @@ impl RenderPipeline {
             },
             multiview: None, // 5.
         });
+        let acc_frame_buffer = device.create_buffer(&BufferDescriptor {
+            label: "acc frame buffer".into(),
+            size: std::mem::size_of::<u32>() as u64,
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
         RenderPipeline {
             pipeline,
             bind_group_layout,
             input_texture_view,
+            acc_frame_buffer,
             input_texture,
             surface_texture: None,
             bind_group: None,
@@ -114,6 +129,9 @@ impl RenderPipeline {
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::TextureView(&self.input_texture_view),
+            },wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Buffer(self.acc_frame_buffer.as_entire_buffer_binding()),
             }],
         }));
     }

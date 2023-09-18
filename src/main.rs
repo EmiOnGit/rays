@@ -16,7 +16,16 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
-
+const COLORS: [[u8; 3]; 7] = [
+    // [240, 230, 220], // sky
+    [12, 12, 18],    // sky
+    [121, 135, 119], // ground
+    [255, 217, 102], // light
+    [189, 210, 182],
+    [162, 178, 159],
+    [244, 177, 131],
+    [223, 166, 123],
+];
 fn main() {
     pollster::block_on(run());
 }
@@ -54,9 +63,6 @@ pub async fn run() {
             ref event,
             window_id,
         } if window_id == app.window().id() => {
-            if app.input(event) {
-                return;
-            }
             app.handle_window_event(event);
             match event {
                 WindowEvent::MouseInput { button, state, .. } => {
@@ -76,10 +82,13 @@ pub async fn run() {
                     }
                 }
                 WindowEvent::Resized(physical_size) => {
-                    app.resize(*physical_size);
+                    app.resize(*physical_size, None);
                 }
-                WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                    app.resize(**new_inner_size);
+                WindowEvent::ScaleFactorChanged {
+                    new_inner_size,
+                    scale_factor,
+                } => {
+                    app.resize(**new_inner_size, Some(*scale_factor as f32));
                 }
                 WindowEvent::CloseRequested
                 | WindowEvent::KeyboardInput {

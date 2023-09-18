@@ -49,8 +49,8 @@ impl Timer {
             .as_secs_f32()
             * 1000.
             / self.frame_count as f32;
-  
-        let fps = 1000. / avg; 
+
+        let fps = 1000. / avg;
         info!(
             "avg {}: {:.2}ms, avg total: {:.2}ms, fps {:.?}",
             self.log_frequency, avg, avg_total, fps

@@ -8,19 +8,16 @@ use crate::math;
 
 #[derive(Debug)]
 pub struct Camera {
-    projection: Mat4,
-    view: Mat4,
-    pub inverse_projection: Mat4,
-    pub inverse_view: Mat4,
-    // vertical fov
-    fov: f32,
-    near_clip: f32,
-    far_clip: f32,
     pub position: Vec3,
     forward: Vec3,
     pub ray_directions: Vec<Vec3>,
+
+    // perspective projection
     pub viewport_height: f32,
     pub viewport_width: f32,
+    pub fov: f32,
+    near_clip: f32,
+    far_clip: f32,
 
     pub last_mouse_position: Option<PhysicalPosition<f64>>,
 }
@@ -34,25 +31,19 @@ impl Camera {
         viewport_height: f32,
     ) -> Camera {
         let forward = -Vec3::X;
-        let position =  Vec3::new(77.7,-7.4,10.) ;
+        let position = Vec3::new(77.7, -7.4, 10.);
 
-        let mut camera = Camera {
+        let camera = Camera {
             forward,
             position,
             fov,
             near_clip,
             far_clip,
-            projection: Mat4::default(),
-            inverse_projection: Mat4::default(),
-            view: Mat4::default(),
-            inverse_view: Mat4::default(),
             viewport_height,
             viewport_width,
             ray_directions: Vec::new(),
             last_mouse_position: None,
         };
-        camera.recalculate_view();
-        camera.recalculate_projection();
         camera
     }
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
@@ -63,8 +54,6 @@ impl Camera {
         }
         self.viewport_width = width as f32;
         self.viewport_height = height as f32;
-        self.recalculate_projection();
-        self.recalculate_view();
 
         // self.calculate_ray_directions();
     }
@@ -81,8 +70,6 @@ impl Camera {
             Some(VirtualKeyCode::E) => self.position += up * speed,
             _ => return false,
         }
-        self.recalculate_view();
-        self.recalculate_projection();
         true
     }
     pub fn on_rotate(&mut self, mouse_position: &PhysicalPosition<f64>) {
@@ -97,57 +84,58 @@ impl Camera {
                 let q2 = Quat::from_axis_angle(Vec3::Y, -delta.x);
                 let q = math::cross(q1, q2).normalize();
                 self.forward = q * self.forward;
-                self.recalculate_view();
-                self.recalculate_projection();
 
                 self.last_mouse_position = Some(*mouse_position);
             }
             None => self.last_mouse_position = Some(*mouse_position),
         }
     }
-    
-    fn recalculate_view(&mut self) {
-        self.view = Mat4::look_at_rh(self.position, self.position + self.forward, Vec3::Y);
-        self.inverse_view = self.view.inverse();
+
+    fn inverse_view_matrix(&self) -> Mat4{
+        Mat4::look_to_rh(self.position, self.forward, Vec3::Y).inverse()
     }
-    fn recalculate_projection(&mut self) {
+    fn inverse_projection_matrix(&self) -> Mat4 {
         let fov = self.fov.to_radians();
-        self.projection = Mat4::perspective_rh(
+
+        Mat4::perspective_rh(
             fov,
             self.viewport_width / self.viewport_height,
             self.near_clip,
             self.far_clip,
-        );
-        self.inverse_projection = self.projection.inverse();
+        )
+        .inverse()
     }
 }
 
+/// Camera representation for the gpu
+///
+/// The offsets are needed for the wgpu layout of structs and are not used
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct CameraUniform {
-    pub fov: [f32;2],
-    pub viewport: [f32; 2],
-    pub camera_position: [f32; 4],
-    pub _offset1: [f32; 8],
-    pub inverse_projection: [f32; 16],
-    pub inverse_view: [f32; 16],
-    pub _offset2: [f32; 16],
+    fov: [f32; 2],
+    viewport: [f32; 2],
+    camera_position: [f32; 4],
+    _offset1: [f32; 8],
+    inverse_projection: [f32; 16],
+    inverse_view: [f32; 16],
+    _offset2: [f32; 16],
 }
 
 impl From<&Camera> for CameraUniform {
     fn from(cam: &Camera) -> Self {
         let viewport = [cam.viewport_width, cam.viewport_height];
         let camera_position = cam.position.extend(0.).to_array();
-        let inverse_projection = cam.inverse_projection.to_cols_array();
-        let inverse_view = cam.inverse_view.to_cols_array();
+        let inverse_projection = cam.inverse_projection_matrix().to_cols_array();
+        let inverse_view = cam.inverse_view_matrix().to_cols_array();
         Self {
-            fov: [cam.fov;2],
+            fov: [cam.fov; 2],
             viewport,
-            _offset1: [0.;8],
+            _offset1: [0.; 8],
             camera_position,
             inverse_projection,
             inverse_view,
-            _offset2: [0.;16],
+            _offset2: [0.; 16],
         }
     }
 }

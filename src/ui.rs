@@ -5,7 +5,7 @@ use egui_winit::State;
 use wgpu::{CommandEncoder, Device, Queue, RenderPass, TextureFormat};
 use winit::{event::WindowEvent, event_loop::EventLoopWindowTarget};
 
-use crate::{scene::Scene, globals::Globals};
+use crate::{globals::Globals, scene::Scene};
 
 pub struct UiManager {
     egui_renderer: egui_wgpu::Renderer,
@@ -57,22 +57,55 @@ impl UiManager {
                 ui.heading(RichText::new("Materials").color(self.header_color));
 
                 for (i, material) in scene.materials.iter_mut().enumerate() {
-                    ui.collapsing(format!("Material {i}"), |ui| {
+                    let i_name = format!("{}", i);
+                    let name = Scene::material_name(i).unwrap_or(&i_name);
+                    ui.collapsing(name, |ui| {
                         ui.horizontal(|ui| {
                             ui.label("color");
                             let color = &mut material.albedo.0;
-                            reset_renderer |= ui.color_edit_button_rgba_unmultiplied(color).changed();
+                            reset_renderer |=
+                                ui.color_edit_button_rgba_premultiplied(color).changed();
                         });
                         ui.horizontal(|ui| {
                             ui.label("emission");
-                            let color = &mut material.emission.0;
-                            reset_renderer |= ui.color_edit_button_rgba_unmultiplied(color).changed();
+                            let color = &mut material.emission;
+                            reset_renderer |=
+                                ui.color_edit_button_rgba_unmultiplied(color).changed();
                         });
                         ui.horizontal(|ui| {
                             ui.label("emission strength");
-                            let color = &mut material.emission.0[3];
+                            let color = &mut material.emission[3];
                             reset_renderer |= ui.add(DragValue::new(color).speed(0.01)).changed();
-
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("metallic");
+                            reset_renderer |= ui
+                                .add(
+                                    DragValue::new(&mut material.metallic)
+                                        .speed(0.01)
+                                        .clamp_range(0..=1),
+                                )
+                                .changed();
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("specular_intensity");
+                            reset_renderer |= ui
+                                .add(
+                                    DragValue::new(&mut material.specular_intensity)
+                                        .speed(0.01)
+                                        .clamp_range(0..=1),
+                                )
+                                .changed();
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("roughness");
+                            reset_renderer |= ui
+                                .add(
+                                    DragValue::new(&mut material.roughness)
+                                        .speed(0.01)
+                                        .clamp_range(0..=1),
+                                )
+                                .changed();
                         });
                     });
                 }
@@ -81,36 +114,58 @@ impl UiManager {
                 ui.heading(RichText::new("Spheres").color(self.header_color));
                 for (i, sphere) in scene.spheres.iter_mut().enumerate() {
                     ui.collapsing(format!("Sphere {i}"), |ui| {
-
                         ui.horizontal(|ui| {
                             ui.label("position");
-                            reset_renderer |= ui.add(DragValue::new(&mut sphere.center.x).speed(0.01)).changed() ;
-                            reset_renderer |= ui.add(DragValue::new(&mut sphere.center.y).speed(0.01)).changed();
-                            reset_renderer |= ui.add(DragValue::new(&mut sphere.center.z).speed(0.01)).changed();
+                            reset_renderer |= ui
+                                .add(DragValue::new(&mut sphere.center.x).speed(0.01))
+                                .changed();
+                            reset_renderer |= ui
+                                .add(DragValue::new(&mut sphere.center.y).speed(0.01))
+                                .changed();
+                            reset_renderer |= ui
+                                .add(DragValue::new(&mut sphere.center.z).speed(0.01))
+                                .changed();
                         });
                         ui.horizontal(|ui| {
                             ui.label("radius");
-                            reset_renderer |= ui.add(DragValue::new(&mut sphere.radius).speed(0.001)).changed();
+                            reset_renderer |= ui
+                                .add(DragValue::new(&mut sphere.radius).speed(0.001))
+                                .changed();
                         });
                         ui.horizontal(|ui| {
                             ui.label("material index");
-                            reset_renderer |= ui.add(DragValue::new(&mut sphere.material_index).clamp_range(0..=scene.materials.len() - 1)).changed();
+                            reset_renderer |= ui
+                                .add(
+                                    DragValue::new(&mut sphere.material_index)
+                                        .clamp_range(0..=scene.materials.len() - 1),
+                                )
+                                .changed();
                         });
                     });
                 }
-                
             });
-          
+
             egui::Window::new("Camera").show(ctx, |ui| {
                 ui.label(format!("Transform"));
                 ui.horizontal(|ui| {
-                    
-                    reset_renderer |= ui.add(DragValue::new(&mut scene.camera.position.x).speed(0.01)).changed();
-                    reset_renderer |= ui.add(DragValue::new(&mut scene.camera.position.y).speed(0.01)).changed();
-                    reset_renderer |= ui.add(DragValue::new(&mut scene.camera.position.z).speed(0.01)).changed();
+                    reset_renderer |= ui
+                        .add(DragValue::new(&mut scene.camera.position.x).speed(0.01))
+                        .changed();
+                    reset_renderer |= ui
+                        .add(DragValue::new(&mut scene.camera.position.y).speed(0.01))
+                        .changed();
+                    reset_renderer |= ui
+                        .add(DragValue::new(&mut scene.camera.position.z).speed(0.01))
+                        .changed();
+                });
+                ui.label(format!("Fov"));
+                ui.horizontal(|ui| {
+                    reset_renderer |= ui
+                        .add(DragValue::new(&mut scene.camera.fov).speed(0.01))
+                        .changed();
                 });
             });
-           
+
             egui::Window::new("Globals").show(ctx, |ui| {
                 ui.label(format!("bounces"));
                 reset_renderer |= ui.add(DragValue::new(&mut globals.bounces)).changed();
@@ -118,7 +173,6 @@ impl UiManager {
                 let color = &mut globals.sky_color;
                 reset_renderer |= ui.color_edit_button_rgba_unmultiplied(color).changed();
             });
-            
         });
 
         for (id, image_delta) in egui_full_output.textures_delta.set {

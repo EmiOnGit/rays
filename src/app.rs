@@ -11,13 +11,14 @@ use winit::{
 };
 
 use crate::{
+    camera::CameraUniform,
     globals::Globals,
     material::Material,
     renderer::{compute_pipeline::ComputePipeline, render_pipeline::RenderPipeline, Renderer},
     scene::Scene,
     sphere::Sphere,
     timer::Timer,
-    ui::UiManager, math::pcg_hash, camera::CameraUniform,
+    ui::UiManager,
 };
 
 pub struct App {
@@ -39,6 +40,7 @@ pub struct App {
     compute_pipeline: ComputePipeline,
     timer: Timer,
     ui_manager: UiManager,
+    scale_factor: f32,
 }
 impl App {
     pub async fn new(window: Window, event_loop: &EventLoop<()>) -> Self {
@@ -96,7 +98,7 @@ impl App {
             format: surface_format,
             width: size.width,
             height: size.height,
-            present_mode: PresentMode::AutoVsync,
+            present_mode: PresentMode::Mailbox,
             alpha_mode: surface_capabilities.alpha_modes[0],
             view_formats: vec![],
         };
@@ -108,13 +110,8 @@ impl App {
         let input_texture_view = input_texture.create_view(&wgpu::TextureViewDescriptor::default());
         let render_pipeline =
             RenderPipeline::new(&device, &surface_config, input_texture_view, input_texture);
-        let compute_pipeline = ComputePipeline::new(&device,&scene);
-        let globals = Globals {
-            seed: 105,
-            bounces: 30,
-            sky_color: [0.,0.,0.0005, 1.],
-            _offset: [0.;2],
-        };
+        let compute_pipeline = ComputePipeline::new(&device, &scene);
+        let globals = Globals::default();
         let timer = Timer::new();
         let screen_descriptor = ScreenDescriptor {
             size_in_pixels: [surface_config.width, surface_config.height],
@@ -135,7 +132,7 @@ impl App {
             queue,
             renderer,
             ui_manager,
-
+            scale_factor: 0.,
             scene,
         }
     }
@@ -144,7 +141,7 @@ impl App {
         let input_texture = self.renderer.create_input_texture(&self.device);
         self.render_pipeline.set_input_texture(input_texture);
     }
-    pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
+    pub fn resize(&mut self, new_size: PhysicalSize<u32>, scale_factor: Option<f32>) {
         self.renderer.resize(new_size);
         self.scene.camera.resize(new_size);
         // resize surface
@@ -153,9 +150,12 @@ impl App {
         self.surface.configure(&self.device, &self.surface_config);
         let input_texture = self.renderer.create_input_texture(&self.device);
         self.render_pipeline.set_input_texture(input_texture);
+        if let Some(scale_factor) = scale_factor {
+            self.scale_factor = scale_factor;
+        }
         let screen_descriptor = ScreenDescriptor {
             size_in_pixels: [self.surface_config.width, self.surface_config.height],
-            pixels_per_point: 1.,
+            pixels_per_point: self.scale_factor,
         };
         self.ui_manager.resize(screen_descriptor);
     }
@@ -163,8 +163,13 @@ impl App {
         self.ui_manager.handle_window_event(window_event);
     }
     pub fn render_ui(&mut self) {
-        let renderer_need_reset = self.ui_manager
-            .run(&self.device, &self.queue, &self.window, &mut self.scene, &mut self.globals);
+        let renderer_need_reset = self.ui_manager.run(
+            &self.device,
+            &self.queue,
+            &self.window,
+            &mut self.scene,
+            &mut self.globals,
+        );
         if renderer_need_reset {
             self.clear_renderer();
         }
@@ -176,7 +181,6 @@ impl App {
         Ok(())
     }
     pub fn queue(&mut self) {
-        let size = self.renderer.size();
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -206,13 +210,13 @@ impl App {
                 globals_size as BufferAddress,
             );
             let camera_size = std::mem::size_of::<CameraUniform>();
-            let camera_buffer =
-                self.device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: "Camera buffer".into(),
-                        contents: bytemuck::cast_slice(&[self.camera_uniform]),
-                        usage: wgpu::BufferUsages::COPY_SRC,
-                    });
+            let camera_buffer = self
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: "Camera buffer".into(),
+                    contents: bytemuck::cast_slice(&[self.camera_uniform]),
+                    usage: wgpu::BufferUsages::COPY_SRC,
+                });
 
             encoder.copy_buffer_to_buffer(
                 &camera_buffer,
@@ -243,7 +247,7 @@ impl App {
                         contents: bytemuck::cast_slice(&self.scene.materials[..]),
                         usage: wgpu::BufferUsages::COPY_SRC,
                     });
-            let material_size = std::mem::size_of::<Material>()  * self.scene.materials.len();
+            let material_size = std::mem::size_of::<Material>() * self.scene.materials.len();
             encoder.copy_buffer_to_buffer(
                 &material_buffer,
                 0,
@@ -298,16 +302,17 @@ impl App {
         });
 
         {
+            let size = self.renderer.image_buffer.dimensions();
             let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: "Compute Pass".into(),
             });
             compute_pass.set_pipeline(&self.compute_pipeline.pipeline);
             compute_pass.set_bind_group(0, &compute_bind_group, &[]);
             // defined in the shader
-            const WORKGROUP_SIZE: u32 = 8;
+            const WORKGROUP_SIZE: u32 = 16;
             compute_pass.dispatch_workgroups(
-                size.width / WORKGROUP_SIZE,
-                size.height / WORKGROUP_SIZE,
+                size.0 / WORKGROUP_SIZE,
+                size.1 / WORKGROUP_SIZE,
                 1,
             );
         }
@@ -380,17 +385,14 @@ impl App {
     pub fn update(&mut self) {
         self.timer.update();
         self.camera_uniform = CameraUniform::from(&self.scene.camera);
-        self.globals.seed = pcg_hash(self.globals.seed);
+        self.globals.seed = fastrand::u32(..);
         self.renderer.acc_frame += 1;
     }
     pub fn window(&self) -> &Window {
         &self.window
     }
-    pub fn input(&self, _event: &WindowEvent) -> bool {
-        false
-    }
+
     pub fn handle_keyboard_input(&mut self, input: &KeyboardInput) {
-        
         let moved = self.scene.camera.on_keyboard_event(input, self.timer.dt());
         if moved {
             self.clear_renderer();

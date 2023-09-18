@@ -1,15 +1,13 @@
 #![allow(dead_code)]
 pub mod compute_pipeline;
-pub mod image_util;
 
 pub mod render_pipeline;
 
 use image::{Rgba, Rgba32FImage};
 use log::warn;
-use wgpu::{Device, Texture};
+use wgpu::{Device, Texture, Extent3d};
 use winit::dpi::PhysicalSize;
 
-use self::image_util::ImageSize;
 pub struct Renderer {
     /// This buffer can be used to draw on
     pub image_buffer: Rgba32FImage,
@@ -26,10 +24,7 @@ impl Renderer {
             acc_frame: 1,
         }
     }
-    pub fn size(&self) -> ImageSize {
-        let dimensions = self.image_buffer.dimensions();
-        ImageSize::new(dimensions.0, dimensions.1)
-    }
+   
     pub fn get_image(&self) -> &Rgba32FImage {
         &self.image_buffer
     }
@@ -40,7 +35,7 @@ impl Renderer {
             self.image_buffer.pixels().len()
         );
         self.acc_frame = 0;
-        
+
         self.image_buffer =
             Rgba32FImage::from_pixel(new_size.width, new_size.height, Rgba([0., 0., 0., 0.]));
     }
@@ -50,9 +45,15 @@ impl Renderer {
     }
 
     pub fn create_input_texture(&self, device: &Device) -> Texture {
+        let size = self.image_buffer.dimensions();
+        let size = Extent3d {
+            width: size.0,
+            height: size.1,
+            depth_or_array_layers: 1,
+        };
         device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Input texture"),
-            size: self.size().into(),
+            size,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,

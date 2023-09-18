@@ -1,6 +1,8 @@
 use wgpu::{BindGroup, Buffer, BufferDescriptor, BufferUsages};
 
-use crate::{globals::Globals, material::Material, sphere::Sphere, scene::Scene, camera::CameraUniform};
+use crate::{
+    camera::CameraUniform, globals::Globals, material::Material, scene::Scene, sphere::Sphere,
+};
 
 pub struct ComputePipeline {
     pub pipeline: wgpu::ComputePipeline,
@@ -109,10 +111,10 @@ impl ComputePipeline {
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let size = std::mem::size_of::<Sphere>() * scene.spheres.len() ;
+        let size = std::mem::size_of::<Sphere>() * scene.spheres.len();
         let sphere_buffer = device.create_buffer(&BufferDescriptor {
             label: "Spheres buffer".into(),
-            size: size as u64 ,
+            size: size as u64,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -120,7 +122,7 @@ impl ComputePipeline {
 
         let material_buffer = device.create_buffer(&BufferDescriptor {
             label: "Material buffer".into(),
-            size: size as u64 ,
+            size: size as u64,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });

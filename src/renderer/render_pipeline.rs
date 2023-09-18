@@ -1,6 +1,6 @@
 use wgpu::{
-    BindGroup, Device, SurfaceConfiguration, SurfaceTexture, Texture, TextureView,
-    TextureViewDescriptor, Buffer, BufferDescriptor, BufferUsages,
+    BindGroup, Buffer, BufferDescriptor, BufferUsages, Device, SurfaceConfiguration,
+    SurfaceTexture, Texture, TextureView, TextureViewDescriptor,
 };
 
 pub struct RenderPipeline {
@@ -43,8 +43,12 @@ impl RenderPipeline {
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
-                        
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+
                     count: None,
                 },
             ],
@@ -126,13 +130,18 @@ impl RenderPipeline {
         self.bind_group = Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Render bind group"),
             layout: &self.bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&self.input_texture_view),
-            },wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::Buffer(self.acc_frame_buffer.as_entire_buffer_binding()),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.input_texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Buffer(
+                        self.acc_frame_buffer.as_entire_buffer_binding(),
+                    ),
+                },
+            ],
         }));
     }
 }

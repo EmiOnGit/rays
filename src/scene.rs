@@ -13,6 +13,8 @@ pub struct Scene {
 }
 
 impl Scene {
+    /// Generates an example scene.
+    /// This is currently the default
     pub fn example_scene() -> Scene {
         let mut spheres = vec![
             Sphere::new(Vec3::new(0., 1000., 0.), 1000.4, 0),

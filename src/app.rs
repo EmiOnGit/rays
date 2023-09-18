@@ -1,8 +1,15 @@
-use std::iter::{self};
+use std::{
+    any::type_name,
+    iter::{self},
+};
 
+use bytemuck::Pod;
 use egui_wgpu::renderer::ScreenDescriptor;
 use log::info;
-use wgpu::{util::DeviceExt, BufferAddress, Features, Label, Limits, PresentMode};
+use wgpu::{
+    util::DeviceExt, Buffer, BufferAddress, CommandEncoder, Device, Features, Label, Limits,
+    PresentMode,
+};
 use winit::{
     dpi::PhysicalSize,
     event::{KeyboardInput, WindowEvent},
@@ -13,10 +20,8 @@ use winit::{
 use crate::{
     camera::CameraUniform,
     globals::Globals,
-    material::Material,
     renderer::{compute_pipeline::ComputePipeline, render_pipeline::RenderPipeline, Renderer},
     scene::Scene,
-    sphere::Sphere,
     timer::Timer,
     ui::UiManager,
 };
@@ -193,189 +198,143 @@ impl App {
             .update_buffers(&mut encoder, &self.device, &self.queue);
 
         {
-            let globals_size = std::mem::size_of::<Globals>();
-            let globals_buffer =
-                self.device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: "Globals buffer".into(),
-                        contents: bytemuck::cast_slice(&[self.globals]),
-                        usage: wgpu::BufferUsages::COPY_SRC,
-                    });
+            let mut encoder = encoder
+                // compute_pipeline
+                .write_buffer(
+                    self.globals,
+                    &self.compute_pipeline.globals_buffer,
+                    &self.device,
+                )
+                .write_buffer(
+                    self.camera_uniform,
+                    &self.compute_pipeline.camera_buffer,
+                    &self.device,
+                )
+                .write_slice_buffer(
+                    &self.scene.spheres,
+                    &self.compute_pipeline.sphere_buffer,
+                    &self.device,
+                )
+                .write_slice_buffer(
+                    &self.scene.materials,
+                    &self.compute_pipeline.material_buffer,
+                    &self.device,
+                )
+                // render pipeline
+                .write_buffer(
+                    self.renderer.acc_frame,
+                    &self.render_pipeline.acc_frame_buffer,
+                    &self.device,
+                );
 
-            encoder.copy_buffer_to_buffer(
-                &globals_buffer,
-                0,
-                &self.compute_pipeline.globals_buffer,
-                0,
-                globals_size as BufferAddress,
-            );
-            let camera_size = std::mem::size_of::<CameraUniform>();
-            let camera_buffer = self
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: "Camera buffer".into(),
-                    contents: bytemuck::cast_slice(&[self.camera_uniform]),
-                    usage: wgpu::BufferUsages::COPY_SRC,
+            let compute_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("Compute bind group"),
+                layout: &self.compute_pipeline.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::Buffer(
+                            self.compute_pipeline
+                                .globals_buffer
+                                .as_entire_buffer_binding(),
+                        ),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Buffer(
+                            self.compute_pipeline
+                                .camera_buffer
+                                .as_entire_buffer_binding(),
+                        ),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::TextureView(
+                            &self.render_pipeline.input_texture_view,
+                        ),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::Buffer(
+                            self.compute_pipeline
+                                .sphere_buffer
+                                .as_entire_buffer_binding(),
+                        ),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: wgpu::BindingResource::Buffer(
+                            self.compute_pipeline
+                                .material_buffer
+                                .as_entire_buffer_binding(),
+                        ),
+                    },
+                ],
+            });
+
+            {
+                let size = self.renderer.image_buffer.dimensions();
+                let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: "Compute Pass".into(),
+                });
+                compute_pass.set_pipeline(&self.compute_pipeline.pipeline);
+                compute_pass.set_bind_group(0, &compute_bind_group, &[]);
+                // defined in the shader
+                const WORKGROUP_SIZE: u32 = 16;
+                compute_pass.dispatch_workgroups(
+                    size.0 / WORKGROUP_SIZE,
+                    size.1 / WORKGROUP_SIZE,
+                    1,
+                );
+            }
+
+            let render_bind_group = self.render_pipeline.bind_group.as_ref().unwrap();
+            {
+                let view = self.render_pipeline.surface_texture_view();
+                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Render Pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: true,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
                 });
 
-            encoder.copy_buffer_to_buffer(
-                &camera_buffer,
-                0,
-                &self.compute_pipeline.camera_buffer,
-                0,
-                camera_size as BufferAddress,
-            );
-            let sphere_buffer = self
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: "Sphere buffer".into(),
-                    contents: bytemuck::cast_slice(&self.scene.spheres[..]),
-                    usage: wgpu::BufferUsages::COPY_SRC,
+                render_pass.set_pipeline(&self.render_pipeline.pipeline);
+                render_pass.set_bind_group(0, render_bind_group, &[]);
+                render_pass.draw(0..6, 0..1);
+            }
+            // write to egui
+            {
+                let view = self.render_pipeline.surface_texture_view();
+
+                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Gui Pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: true,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
                 });
-            let sphere_size = std::mem::size_of::<Sphere>() * self.scene.spheres.len();
-            encoder.copy_buffer_to_buffer(
-                &sphere_buffer,
-                0,
-                &self.compute_pipeline.sphere_buffer,
-                0,
-                sphere_size as BufferAddress,
-            );
-            let material_buffer =
-                self.device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: "Material buffer".into(),
-                        contents: bytemuck::cast_slice(&self.scene.materials[..]),
-                        usage: wgpu::BufferUsages::COPY_SRC,
-                    });
-            let material_size = std::mem::size_of::<Material>() * self.scene.materials.len();
-            encoder.copy_buffer_to_buffer(
-                &material_buffer,
-                0,
-                &self.compute_pipeline.material_buffer,
-                0,
-                material_size as BufferAddress,
-            );
-        }
-        let compute_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Compute bind group"),
-            layout: &self.compute_pipeline.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::Buffer(
-                        self.compute_pipeline
-                            .globals_buffer
-                            .as_entire_buffer_binding(),
-                    ),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Buffer(
-                        self.compute_pipeline
-                            .camera_buffer
-                            .as_entire_buffer_binding(),
-                    ),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(
-                        &self.render_pipeline.input_texture_view,
-                    ),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::Buffer(
-                        self.compute_pipeline
-                            .sphere_buffer
-                            .as_entire_buffer_binding(),
-                    ),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: wgpu::BindingResource::Buffer(
-                        self.compute_pipeline
-                            .material_buffer
-                            .as_entire_buffer_binding(),
-                    ),
-                },
-            ],
-        });
 
-        {
-            let size = self.renderer.image_buffer.dimensions();
-            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: "Compute Pass".into(),
-            });
-            compute_pass.set_pipeline(&self.compute_pipeline.pipeline);
-            compute_pass.set_bind_group(0, &compute_bind_group, &[]);
-            // defined in the shader
-            const WORKGROUP_SIZE: u32 = 16;
-            compute_pass.dispatch_workgroups(size.0 / WORKGROUP_SIZE, size.1 / WORKGROUP_SIZE, 1);
+                self.ui_manager.render(&mut render_pass);
+            }
+            // submit will accept anything that implements IntoIter
+            self.queue.submit(iter::once(encoder.finish()));
+            self.render_pipeline
+                .surface_texture
+                .take()
+                .unwrap()
+                .present();
         }
-        {
-            let acc_size = std::mem::size_of::<u32>();
-            let acc_frame_buffer =
-                self.device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: "Acc frame buffer".into(),
-                        contents: bytemuck::cast_slice(&[self.renderer.acc_frame]),
-                        usage: wgpu::BufferUsages::COPY_SRC,
-                    });
-
-            encoder.copy_buffer_to_buffer(
-                &acc_frame_buffer,
-                0,
-                &self.render_pipeline.acc_frame_buffer,
-                0,
-                acc_size as BufferAddress,
-            );
-        }
-        let render_bind_group = self.render_pipeline.bind_group.as_ref().unwrap();
-        {
-            let view = self.render_pipeline.surface_texture_view();
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: true,
-                    },
-                })],
-                depth_stencil_attachment: None,
-            });
-
-            render_pass.set_pipeline(&self.render_pipeline.pipeline);
-            render_pass.set_bind_group(0, render_bind_group, &[]);
-            render_pass.draw(0..6, 0..1);
-        }
-        // write to egui
-        {
-            let view = self.render_pipeline.surface_texture_view();
-
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Gui Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: true,
-                    },
-                })],
-                depth_stencil_attachment: None,
-            });
-
-            self.ui_manager.render(&mut render_pass);
-        }
-        // submit will accept anything that implements IntoIter
-        self.queue.submit(iter::once(encoder.finish()));
-        self.render_pipeline
-            .surface_texture
-            .take()
-            .unwrap()
-            .present();
     }
 
     pub fn update(&mut self) {
@@ -393,5 +352,41 @@ impl App {
         if moved {
             self.clear_renderer();
         }
+    }
+}
+
+trait BufferSet {
+    fn write_buffer<T: Pod>(self, obj: T, destination: &Buffer, device: &Device) -> Self;
+    fn write_slice_buffer<T: Pod>(self, obj: &[T], destination: &Buffer, device: &Device) -> Self;
+}
+impl BufferSet for CommandEncoder {
+    fn write_buffer<T: Pod>(mut self, obj: T, destination: &Buffer, device: &Device) -> Self {
+        let t_size = std::mem::size_of::<T>();
+        let name = type_name::<T>();
+        let source = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: format!("{name} buffer").as_str().into(),
+            contents: bytemuck::cast_slice(&[obj]),
+            usage: wgpu::BufferUsages::COPY_SRC,
+        });
+
+        self.copy_buffer_to_buffer(&source, 0, &destination, 0, t_size as BufferAddress);
+        self
+    }
+    fn write_slice_buffer<T: Pod>(
+        mut self,
+        obj: &[T],
+        destination: &Buffer,
+        device: &Device,
+    ) -> Self {
+        let t_size = std::mem::size_of::<T>() * obj.len();
+        let name = type_name::<T>();
+        let source = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: format!("{name} buffer").as_str().into(),
+            contents: bytemuck::cast_slice(obj),
+            usage: wgpu::BufferUsages::COPY_SRC,
+        });
+
+        self.copy_buffer_to_buffer(&source, 0, &destination, 0, t_size as BufferAddress);
+        self
     }
 }

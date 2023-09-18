@@ -100,7 +100,7 @@ impl RenderPipeline {
         });
         let acc_frame_buffer = device.create_buffer(&BufferDescriptor {
             label: "acc frame buffer".into(),
-            size: std::mem::size_of::<u32>() as u64,
+            size: std::mem::size_of::<usize>() as u64,
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });

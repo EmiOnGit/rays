@@ -310,11 +310,7 @@ impl App {
             compute_pass.set_bind_group(0, &compute_bind_group, &[]);
             // defined in the shader
             const WORKGROUP_SIZE: u32 = 16;
-            compute_pass.dispatch_workgroups(
-                size.0 / WORKGROUP_SIZE,
-                size.1 / WORKGROUP_SIZE,
-                1,
-            );
+            compute_pass.dispatch_workgroups(size.0 / WORKGROUP_SIZE, size.1 / WORKGROUP_SIZE, 1);
         }
         {
             let acc_size = std::mem::size_of::<u32>();

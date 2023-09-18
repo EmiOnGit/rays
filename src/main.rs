@@ -17,8 +17,7 @@ use winit::{
     window::WindowBuilder,
 };
 const COLORS: [[u8; 3]; 7] = [
-    // [240, 230, 220], // sky
-    [12, 12, 18],    // sky
+    [244, 244, 244], // sky
     [121, 135, 119], // ground
     [255, 217, 102], // light
     [189, 210, 182],

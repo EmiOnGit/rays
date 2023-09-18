@@ -5,7 +5,7 @@ pub mod render_pipeline;
 
 use image::{Rgba, Rgba32FImage};
 use log::warn;
-use wgpu::{Device, Texture, Extent3d};
+use wgpu::{Device, Extent3d, Texture};
 use winit::dpi::PhysicalSize;
 
 pub struct Renderer {
@@ -24,7 +24,7 @@ impl Renderer {
             acc_frame: 1,
         }
     }
-   
+
     pub fn get_image(&self) -> &Rgba32FImage {
         &self.image_buffer
     }

@@ -91,7 +91,7 @@ impl Camera {
         }
     }
 
-    fn inverse_view_matrix(&self) -> Mat4{
+    fn inverse_view_matrix(&self) -> Mat4 {
         Mat4::look_to_rh(self.position, self.forward, Vec3::Y).inverse()
     }
     fn inverse_projection_matrix(&self) -> Mat4 {

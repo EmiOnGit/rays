@@ -42,7 +42,7 @@ impl Scene {
         let materials = vec![
             Material::new() // ground
                 .with_color(palette[1])
-                .with_roughness(0.8),
+                .with_roughness(0.15),
             Material::new() // sun
                 .with_emission(palette[2], 100.)
                 .with_roughness(0.4),

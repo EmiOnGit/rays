@@ -1,4 +1,4 @@
-use wgpu::{BindGroup, Buffer, BufferDescriptor, BufferUsages};
+use wgpu::{BindGroup, Buffer, BufferDescriptor, BufferUsages, Device, TextureView};
 
 use crate::{
     camera::CameraUniform, globals::Globals, material::Material, scene::Scene, sphere::Sphere,
@@ -135,5 +135,51 @@ impl ComputePipeline {
             globals_buffer,
             material_buffer,
         }
+    }
+    pub fn prepare_bind_group(&mut self, device: &Device, output_texture_view: &TextureView) {
+         self.bind_group = Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Compute bind group"),
+            layout: &self.bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Buffer(
+                        self
+                            .globals_buffer
+                            .as_entire_buffer_binding(),
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Buffer(
+                        self
+                            .camera_buffer
+                            .as_entire_buffer_binding(),
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(
+                        &output_texture_view,
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Buffer(
+                        self
+                            .sphere_buffer
+                            .as_entire_buffer_binding(),
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::Buffer(
+                        self
+                            .material_buffer
+                            .as_entire_buffer_binding(),
+                    ),
+                },
+            ],
+        }));
     }
 }

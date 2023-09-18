@@ -8,7 +8,7 @@ use egui_wgpu::renderer::ScreenDescriptor;
 use log::info;
 use wgpu::{
     util::DeviceExt, Buffer, BufferAddress, CommandEncoder, Device, Features, Label, Limits,
-    PresentMode,
+    PresentMode, Color, TextureViewDescriptor, SurfaceTexture,
 };
 use winit::{
     dpi::PhysicalSize,
@@ -29,7 +29,6 @@ use crate::{
 pub struct App {
     surface: wgpu::Surface,
     surface_config: wgpu::SurfaceConfiguration,
-
     queue: wgpu::Queue,
     pub device: wgpu::Device,
     // The window must be declared after the surface so
@@ -124,6 +123,7 @@ impl App {
         };
         let camera_uniform = CameraUniform::from(&scene.camera);
         let ui_manager = UiManager::new(&device, surface_format, screen_descriptor, event_loop);
+
         Self {
             window,
             surface,
@@ -179,162 +179,116 @@ impl App {
             self.clear_renderer();
         }
     }
-    pub fn prepare(&mut self) -> Result<(), wgpu::SurfaceError> {
+    pub fn prepare(&mut self) -> Result<SurfaceTexture, wgpu::SurfaceError> {
         let surface_texture = self.surface.get_current_texture()?;
-        self.render_pipeline.surface_texture = Some(surface_texture);
+        
+        // self.render_pipeline.surface_texture = Some(surface_texture);
         self.render_pipeline.prepare_bind_group(&self.device);
-        Ok(())
+        self.compute_pipeline.prepare_bind_group(&self.device, &self.render_pipeline.input_texture_view);
+        Ok(surface_texture)
     }
-    pub fn queue(&mut self) {
+    pub fn queue(&mut self, surface_texture: SurfaceTexture) {
+        let surface_view = surface_texture
+            .texture
+            .create_view(&TextureViewDescriptor::default());
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
+                label: Some("Encoder"),
             });
 
-        // write data to gpu
-
+        // update buffers
         self.ui_manager
             .update_buffers(&mut encoder, &self.device, &self.queue);
+        let mut encoder = encoder
+            // compute_pipeline
+            .write_buffer(
+                self.globals,
+                &self.compute_pipeline.globals_buffer,
+                &self.device,
+            )
+            .write_buffer(
+                self.camera_uniform,
+                &self.compute_pipeline.camera_buffer,
+                &self.device,
+            )
+            .write_slice_buffer(
+                &self.scene.spheres,
+                &self.compute_pipeline.sphere_buffer,
+                &self.device,
+            )
+            .write_slice_buffer(
+                &self.scene.materials,
+                &self.compute_pipeline.material_buffer,
+                &self.device,
+            )
+            // render pipeline
+            .write_buffer(
+                self.renderer.acc_frame,
+                &self.render_pipeline.acc_frame_buffer,
+                &self.device,
+            );
+       
 
         {
-            let mut encoder = encoder
-                // compute_pipeline
-                .write_buffer(
-                    self.globals,
-                    &self.compute_pipeline.globals_buffer,
-                    &self.device,
-                )
-                .write_buffer(
-                    self.camera_uniform,
-                    &self.compute_pipeline.camera_buffer,
-                    &self.device,
-                )
-                .write_slice_buffer(
-                    &self.scene.spheres,
-                    &self.compute_pipeline.sphere_buffer,
-                    &self.device,
-                )
-                .write_slice_buffer(
-                    &self.scene.materials,
-                    &self.compute_pipeline.material_buffer,
-                    &self.device,
-                )
-                // render pipeline
-                .write_buffer(
-                    self.renderer.acc_frame,
-                    &self.render_pipeline.acc_frame_buffer,
-                    &self.device,
-                );
+            // dispatch compute pass
+            let size = self.renderer.image_buffer.dimensions();
+            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: "Compute Pass".into(),
+            });
+            compute_pass.set_pipeline(&self.compute_pipeline.pipeline);
+            compute_pass.set_bind_group(0, self.compute_pipeline.bind_group.as_ref().unwrap(), &[]);
+            // defined in the shader
+            const WORKGROUP_SIZE: u32 = 16;
+            compute_pass.dispatch_workgroups(
+                size.0 / WORKGROUP_SIZE,
+                size.1 / WORKGROUP_SIZE,
+                1,
+            );
+        }
+        // let view = self.render_pipeline.surface_texture_view();
 
-            let compute_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("Compute bind group"),
-                layout: &self.compute_pipeline.bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::Buffer(
-                            self.compute_pipeline
-                                .globals_buffer
-                                .as_entire_buffer_binding(),
-                        ),
+        let render_bind_group = self.render_pipeline.bind_group.as_ref().unwrap();
+        {
+            // dispatch render pass
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &surface_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(Color::WHITE),
+                        store: true,
                     },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Buffer(
-                            self.compute_pipeline
-                                .camera_buffer
-                                .as_entire_buffer_binding(),
-                        ),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: wgpu::BindingResource::TextureView(
-                            &self.render_pipeline.input_texture_view,
-                        ),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 3,
-                        resource: wgpu::BindingResource::Buffer(
-                            self.compute_pipeline
-                                .sphere_buffer
-                                .as_entire_buffer_binding(),
-                        ),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 4,
-                        resource: wgpu::BindingResource::Buffer(
-                            self.compute_pipeline
-                                .material_buffer
-                                .as_entire_buffer_binding(),
-                        ),
-                    },
-                ],
+                })],
+                depth_stencil_attachment: None,
             });
 
-            {
-                let size = self.renderer.image_buffer.dimensions();
-                let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                    label: "Compute Pass".into(),
-                });
-                compute_pass.set_pipeline(&self.compute_pipeline.pipeline);
-                compute_pass.set_bind_group(0, &compute_bind_group, &[]);
-                // defined in the shader
-                const WORKGROUP_SIZE: u32 = 16;
-                compute_pass.dispatch_workgroups(
-                    size.0 / WORKGROUP_SIZE,
-                    size.1 / WORKGROUP_SIZE,
-                    1,
-                );
-            }
-
-            let render_bind_group = self.render_pipeline.bind_group.as_ref().unwrap();
-            {
-                let view = self.render_pipeline.surface_texture_view();
-                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Render Pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: true,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                });
-
-                render_pass.set_pipeline(&self.render_pipeline.pipeline);
-                render_pass.set_bind_group(0, render_bind_group, &[]);
-                render_pass.draw(0..6, 0..1);
-            }
-            // write to egui
-            {
-                let view = self.render_pipeline.surface_texture_view();
-
-                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Gui Pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: true,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                });
-
-                self.ui_manager.render(&mut render_pass);
-            }
-            // submit will accept anything that implements IntoIter
-            self.queue.submit(iter::once(encoder.finish()));
-            self.render_pipeline
-                .surface_texture
-                .take()
-                .unwrap()
-                .present();
+            render_pass.set_pipeline(&self.render_pipeline.pipeline);
+            render_pass.set_bind_group(0, render_bind_group, &[]);
+            render_pass.draw(0..6, 0..1);
         }
+        {
+            // dispatch gui pass
+
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Ui Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &surface_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        // We don't want to override the render pass!
+                        load: wgpu::LoadOp::Load,
+                        store: true,
+                    },
+                })],
+                depth_stencil_attachment: None,
+            });
+            self.ui_manager.render(&mut render_pass);
+        }
+        // submit will accept anything that implements IntoIter
+        self.queue.submit(iter::once(encoder.finish()));
+        surface_texture.present();
     }
 
     pub fn update(&mut self) {
@@ -356,16 +310,16 @@ impl App {
 }
 
 trait BufferSet {
-    fn write_buffer<T: Pod>(self, obj: T, destination: &Buffer, device: &Device) -> Self;
-    fn write_slice_buffer<T: Pod>(self, obj: &[T], destination: &Buffer, device: &Device) -> Self;
+    fn write_buffer<T: Pod>(self, item: T, destination: &Buffer, device: &Device) -> Self;
+    fn write_slice_buffer<T: Pod>(self, item: &[T], destination: &Buffer, device: &Device) -> Self;
 }
 impl BufferSet for CommandEncoder {
-    fn write_buffer<T: Pod>(mut self, obj: T, destination: &Buffer, device: &Device) -> Self {
+    fn write_buffer<T: Pod>(mut self, item: T, destination: &Buffer, device: &Device) -> Self {
         let t_size = std::mem::size_of::<T>();
         let name = type_name::<T>();
         let source = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: format!("{name} buffer").as_str().into(),
-            contents: bytemuck::cast_slice(&[obj]),
+            contents: bytemuck::cast_slice(&[item]),
             usage: wgpu::BufferUsages::COPY_SRC,
         });
 
@@ -374,15 +328,15 @@ impl BufferSet for CommandEncoder {
     }
     fn write_slice_buffer<T: Pod>(
         mut self,
-        obj: &[T],
+        item: &[T],
         destination: &Buffer,
         device: &Device,
     ) -> Self {
-        let t_size = std::mem::size_of::<T>() * obj.len();
+        let t_size = std::mem::size_of::<T>() * item.len();
         let name = type_name::<T>();
         let source = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: format!("{name} buffer").as_str().into(),
-            contents: bytemuck::cast_slice(obj),
+            contents: bytemuck::cast_slice(item),
             usage: wgpu::BufferUsages::COPY_SRC,
         });
 

@@ -1,13 +1,11 @@
 use wgpu::{
-    BindGroup, Buffer, BufferDescriptor, BufferUsages, Device, SurfaceConfiguration,
-    SurfaceTexture, Texture, TextureView, TextureViewDescriptor,
+    BindGroup, Buffer, BufferDescriptor, BufferUsages, Device, SurfaceConfiguration, Texture, TextureView, TextureViewDescriptor,
 };
 
 pub struct RenderPipeline {
     pub pipeline: wgpu::RenderPipeline,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: Option<BindGroup>,
-    pub surface_texture: Option<SurfaceTexture>,
     pub input_texture_view: TextureView,
     pub input_texture: Texture,
     pub acc_frame_buffer: Buffer,
@@ -110,7 +108,6 @@ impl RenderPipeline {
             input_texture_view,
             acc_frame_buffer,
             input_texture,
-            surface_texture: None,
             bind_group: None,
         }
     }
@@ -119,13 +116,7 @@ impl RenderPipeline {
         self.input_texture = texture;
     }
 
-    pub fn surface_texture_view(&self) -> TextureView {
-        self.surface_texture
-            .as_ref()
-            .unwrap()
-            .texture
-            .create_view(&TextureViewDescriptor::default())
-    }
+   
     pub fn prepare_bind_group(&mut self, device: &Device) {
         self.bind_group = Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Render bind group"),

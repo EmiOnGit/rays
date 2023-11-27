@@ -2,8 +2,12 @@ use glam::Vec3;
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct Sphere {
+    /// Center of sphere in world space
     pub center: Vec3,
+    /// Radius of the sphere
     pub radius: f32,
+    /// Which material to use.
+    /// panics if the index is not found.
     pub material_index: u32,
     // needed for shader alignment
     _offset: [f32; 3],

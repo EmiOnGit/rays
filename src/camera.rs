@@ -8,15 +8,19 @@ use crate::math;
 
 #[derive(Debug)]
 pub struct Camera {
+    /// Position in world space of the camera
     pub position: Vec3,
-    forward: Vec3,
-    pub ray_directions: Vec<Vec3>,
-
-    // perspective projection
-    pub viewport_height: f32,
-    pub viewport_width: f32,
+    /// Field of view corresponds to how much we can see.
+    /// In this implementation the horizontal fov is used
     pub fov: f32,
+    /// forward view direction of the camera
+    forward: Vec3,
+    // perspective projection
+    viewport_height: f32,
+    viewport_width: f32,
+    /// nearest object distance that is still visible
     near_clip: f32,
+    /// farest object distance that is still visible
     far_clip: f32,
 
     pub last_mouse_position: Option<PhysicalPosition<f64>>,
@@ -31,6 +35,7 @@ impl Camera {
         viewport_height: f32,
     ) -> Camera {
         let forward = -Vec3::X;
+        // #TODO no reason to hardcode a position
         let position = Vec3::new(77.7, -7.4, 10.);
 
         let camera = Camera {
@@ -41,11 +46,12 @@ impl Camera {
             far_clip,
             viewport_height,
             viewport_width,
-            ray_directions: Vec::new(),
             last_mouse_position: None,
         };
         camera
     }
+    /// In case of a resize event of the viewport.
+    /// This can happen whenever the window itself get resized
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
         let width = new_size.width;
         let height = new_size.height;
@@ -54,11 +60,10 @@ impl Camera {
         }
         self.viewport_width = width as f32;
         self.viewport_height = height as f32;
-
-        // self.calculate_ray_directions();
     }
+    /// Handles keyboard events that let the camera move
     pub fn on_keyboard_event(&mut self, input: &KeyboardInput, dt: f32) -> bool {
-        let speed = 20. * dt;
+        let speed = 30. * dt;
         let up = Vec3::Y;
         let right_direction = self.forward.cross(up);
         match input.virtual_keycode {
@@ -72,6 +77,7 @@ impl Camera {
         }
         true
     }
+    /// Handles mouse drags, which are used to rotate the camera
     pub fn on_rotate(&mut self, mouse_position: &PhysicalPosition<f64>) {
         let right_direction = self.forward.cross(Vec3::Y);
         match self.last_mouse_position {
@@ -116,6 +122,7 @@ pub struct CameraUniform {
     fov: [f32; 2],
     viewport: [f32; 2],
     camera_position: [f32; 4],
+    // offset needed for padding restrictions
     _offset1: [f32; 8],
     inverse_projection: [f32; 16],
     inverse_view: [f32; 16],

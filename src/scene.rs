@@ -22,11 +22,11 @@ impl Scene {
             Sphere::new(Vec3::new(-20.8, -4.57, 10.7), 5., 4),
             Sphere::new(Vec3::new(10.22, -6.4, -20.25), 7., 5),
         ];
-        for x in 0..10 {
-            for y in 0..10 {
-                for z in 1..3 {
-                    let mut f = rand_vec(x + y * 0x43182 + z * 0x13457);
-                    let r = rand_vec((f.x * 100000.) as u32 + x);
+        for x in 0..8 {
+            for y in 0..8 {
+                for z in 1..2 {
+                    let mut f = rand_vec(x + y * 0x43188 + z * 0x13457);
+                    let r = rand_vec((f.x * 100004.) as u32 + x);
 
                     let material_index = ((r.length() * 0x483290 as f32) as usize ^ 0x587439) % 5;
                     let radius = f.y * 1.2;
